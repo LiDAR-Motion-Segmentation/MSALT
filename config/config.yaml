@@ -1,0 +1,7 @@
+defaults:
+  - sensor_setup: salt_setup  
+  - _self_
+
+app:
+  window_title: "SALT annotator"
+  window_size: [1600, 900]
