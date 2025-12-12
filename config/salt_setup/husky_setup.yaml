@@ -1,31 +1,35 @@
 name: "husky_setup"
 
 paths:
-  root_dir: ""
+  lidar_folder: "/home/soumoroy/Downloads/annotations/aug5_sustech/nov14/lidar"
 
-  image_folders:
-    CAM_1: ""
-    CAM_2: ""
-    CAM_3: ""
-    CAM_4: ""
-    CAM_5: ""
-
-  lidar_folder: ""
-
-  calib_file: ""
-
-cameras:
-  - id: "CAM_1"
-    name: "Front Center"
-  - id: "CAM_2"
-    name: "Front Left"
-  - id: "CAM_3"
-    name: "Front Right"
-  - id: "CAM_4"
-    name: "Rear Left"
-  - id: "CAM_5"
-    name: "Rear Right"
+  cameras:
+    - id: "CAM_1"
+      name: "Front Center"
+      image_folder: "/home/soumoroy/Downloads/MCMPT_output_nice_op/cam_1/images"
+      intrinsics: "/home/soumoroy/Downloads/MCMPT_output_nice_op/camera1_intrinsics.txt"
+      extrinsics: "/home/soumoroy/Downloads/MCMPT_output_nice_op/camera1_extrinsics.txt"
+    - id: "CAM_2"
+      name: "Front Left"
+      image_folder: "/home/soumoroy/Downloads/MCMPT_output_nice_op/cam_2/images"
+      intrinsics: "/home/soumoroy/Downloads/MCMPT_output_nice_op/camera2_intrinsics.txt"
+      extrinsics: "/home/soumoroy/Downloads/MCMPT_output_nice_op/camera2_extrinsics.txt"
+    - id: "CAM_3"
+      name: "Front Right"
+      image_folder: "/home/soumoroy/Downloads/MCMPT_output_nice_op/cam_3/images"
+      intrinsics: "/home/soumoroy/Downloads/MCMPT_output_nice_op/camera3_intrinsics.txt"
+      extrinsics: "/home/soumoroy/Downloads/MCMPT_output_nice_op/camera3_extrinsics.txt"
+    - id: "CAM_4"
+      name: "Rear Left"
+      image_folder: "/home/soumoroy/Downloads/MCMPT_output_nice_op/cam_4/images"
+      intrinsics: "/home/soumoroy/Downloads/MCMPT_output_nice_op/camera4_intrinsics.txt"
+      extrinsics: "/home/soumoroy/Downloads/MCMPT_output_nice_op/camera4_extrinsics.txt"
+    - id: "CAM_5"
+      name: "Rear Right"
+      image_folder: "/home/soumoroy/Downloads/MCMPT_output_nice_op/cam_5/images"
+      intrinsics: "/home/soumoroy/Downloads/MCMPT_output_nice_op/camera5_intrinsics.txt"
+      extrinsics: "/home/soumoroy/Downloads/MCMPT_output_nice_op/camera5_extrinsics.txt"
 
 extensions:
-  images: ".png"
+  images: ".jpg"
   lidar: ".pcd"

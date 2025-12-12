@@ -1,0 +1,29 @@
+# .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+env/
+
+# Data (NEVER commit these)
+data/
+logs/
+outputs/
+*.pcd
+*.bin
+*.las
+*.bag
+
+# Model Weights
+*.pt
+*.pth
+*.onnx
+
+# IDE
+.vscode/
+.idea/
+
+# Hydra
+outputs/
+multirun/

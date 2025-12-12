@@ -1,5 +1,5 @@
 defaults:
-  - sensor_setup: salt_setup  
+  - salt_setup: husky_setup  
   - _self_
 
 app:

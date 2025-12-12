@@ -1,11 +1,12 @@
 from pathlib import Path
 from typing import List, Dict, Optional
 from omegaconf import DictConfig
-
-from src.data.structures import SensorConfig, FrameData
+import logging
+from src.data.structures import SensorConfig, FrameData, CameraConfig
 from src.data.interfaces import BaseDatasetLoader
 from src.data.loaders.realsense_loader import RealSenseLoader
 
+logger = logging.getLogger(__name__)
 class DataController:
     def __init__(self, cfg: DictConfig):
         self.cfg = cfg
@@ -13,26 +14,33 @@ class DataController:
         self._init_loader()
         
     def _init_loader(self):
-        setup = self.cfg.sensor_setup
-        root = Path(setup.paths.root_dir)
+        setup = self.cfg.salt_setup
         
-        cam_paths = {
-            cid: root / path 
-            for cid, path in setup.paths.image_folders.items()
-        }
-        
+        camera_configs_list = []
+        if 'cameras' in setup.paths:
+            for cam_yaml in setup.paths.cameras:
+                intrin = Path(cam_yaml.intrinsics) if 'intrinsics' in cam_yaml else None
+                extrin = Path(cam_yaml.extrinsics) if 'extrinsics' in cam_yaml else None
+                
+                c_cfg = CameraConfig(
+                    id=cam_yaml.id,
+                    name=cam_yaml.name,
+                    image_path=Path(cam_yaml.image_folder),
+                    intrinsics_path=intrin,
+                    extrinsics_path=extrin
+                )
+                camera_configs_list.append(c_cfg)
+        else:
+            # Fallback or error if no cameras defined
+            logger.warning("No 'cameras' list found in sensor_setup paths.")
+
         sensor_cfg = SensorConfig(
-            root_dir=root,
-            image_paths=cam_paths,
-            lidar_path=root / setup.paths.lidar_folder,
+            lidar_path=Path(setup.paths.lidar_folder),
+            cameras=camera_configs_list,
             ext_img=setup.extensions.images,
             ext_lidar=setup.extensions.lidar
         )
-        
-        if "realsense" in setup.name.lower():
-            self.loader = RealSenseLoader(sensor_cfg)
-        else:
-            raise ValueError(f"Unknown dataset type: {setup.name}")
+        self.loader = RealSenseLoader(sensor_cfg)
         
     def get_total_frames(self) -> int:
         return len(self.loader) if self.loader else 0
