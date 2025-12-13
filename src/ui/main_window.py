@@ -9,6 +9,8 @@ from src.ui.components.camera_view import CameraStripWidget
 from src.ui.components.lidar_view import LidarVisualizer
 from src.ui.playback_widget import PlaybackWidget
 
+from src.core.annotation_manager import AnnotationManager
+from src.core.objects import BoundingBox3D
 
 class MainWindow(QMainWindow):
     def __init__(self, data_controller: DataController):
@@ -16,7 +18,13 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("SALT: Sensor Fusion Annotator")
         self.resize(1920, 1080)
         self.data_controller = data_controller
-
+        
+        self.annotation_manager = AnnotationManager()
+        
+        # trying dummy data
+        dummy_box = BoundingBox3D(x=0, y=0, z=-1, dx=4, dy=2, dz=1.5, heading=0.5)
+        self.annotation_manager.add_box(0, dummy_box)
+        
         # registery of active plugins
         self.plugins: List[BasePluginWidget] = []
 
@@ -25,7 +33,7 @@ class MainWindow(QMainWindow):
 
         if self.data_controller.get_total_frames() > 0:
             self.load_frame(0)
-
+            
     def _init_ui(self):
         # assembling UI using dock widgets
 
@@ -79,5 +87,7 @@ class MainWindow(QMainWindow):
         2. Notify ALL Plugins
         """
         frame_data = self.data_controller.get_frame(idx)
+        boxes = self.annotation_manager.get_boxes(idx)
         for plugin in self.plugins:
             plugin.on_frame_update(frame_data)
+        self.lidar_widget.update_boxes(boxes)
