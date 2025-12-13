@@ -13,5 +13,9 @@ A production-grade PyQt6 application for labeling synchronized LiDAR point cloud
 
 to run use
 ```python3
-python3 main.py
+git clone https://github.com/LiDAR-Motion-Segmentation/SALT.git
+cd SALT
+uv sync
+uv run main.py
 ```
+![alt text](./assets/ui_v1.png)
