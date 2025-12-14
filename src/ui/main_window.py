@@ -22,8 +22,8 @@ class MainWindow(QMainWindow):
         self.annotation_manager = AnnotationManager()
         
         # trying dummy data
-        dummy_box = BoundingBox3D(x=0, y=0, z=-1, dx=4, dy=2, dz=1.5, heading=0.5)
-        self.annotation_manager.add_box(0, dummy_box)
+        # dummy_box = BoundingBox3D(x=0, y=0, z=-1, dx=4, dy=2, dz=1.5, heading=0.5)
+        # self.annotation_manager.add_box(0, dummy_box)
         
         # registery of active plugins
         self.plugins: List[BasePluginWidget] = []

@@ -1,18 +1,22 @@
 from typing import Container, List, Dict
 import numpy as np
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QVBoxLayout, QScrollArea
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap
 
 from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
-
+from src.ui.components.drawable_label import DrawableLabel
 
 class CameraStripWidget(BasePluginWidget):
+    
+    # New Signal: (CameraID, x, y, w, h)
+    box_drawn = pyqtSignal(str, int, int, int, int)
+    
     def __init__(self, camera_ids: List[str]):
         super().__init__(title="camera strip")
         self.camera_ids = camera_ids
-        self.image_labels: Dict[str, QLabel] = {}
+        self.image_labels: Dict[str, DrawableLabel] = {}
         self._setup_ui()
 
     def _setup_ui(self):
@@ -20,7 +24,7 @@ class CameraStripWidget(BasePluginWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         container = QWidget()
         self.strip_layout = QHBoxLayout(container)
 
@@ -35,11 +39,15 @@ class CameraStripWidget(BasePluginWidget):
             lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             # Image Placeholder
-            lbl_img = QLabel()
+            lbl_img = DrawableLabel()
             lbl_img.setStyleSheet("background-color: #111; border: 1px solid #444;")
             lbl_img.setMinimumSize(320, 240)
             lbl_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl_img.setText("No Signal")
+            lbl_img.setScaledContents(True)
+            
+            lbl_img.selection_finished.connect(
+                lambda x, y, w, h, cid=cam_id: self.box_drawn.emit(cid, x, y, w, h)
+            )
 
             v_layout.addWidget(lbl_title)
             v_layout.addWidget(lbl_img)
@@ -53,20 +61,15 @@ class CameraStripWidget(BasePluginWidget):
     def on_frame_update(self, data: FrameData) -> None:
         for cam_id, img_array in data.images.items():
             if cam_id in self.image_labels:
+                h, w, c = img_array.shape
+                self.image_labels[cam_id].set_original_resolution(w, h)
                 self._update_single_camera(cam_id, img_array)
 
     def _update_single_camera(self, cam_id: str, array: np.ndarray):
         h, w, c = array.shape
         bytes_per_line = c * w
         q_img = QImage(array.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
-
-        target_label = self.image_labels[cam_id]
-        scaled_pixmap = QPixmap.fromImage(q_img).scaled(
-            target_label.size(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        target_label.setPixmap(scaled_pixmap)
+        self.image_labels[cam_id].setPixmap(QPixmap.fromImage(q_img))
 
     def reset(self):
         for lbl in self.image_labels.values():
