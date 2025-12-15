@@ -67,7 +67,7 @@ class DrawableLabel(QLabel):
                 real_h = int(screen_rect.height() * scale_y)
                 
                 # Emit the signal
-                print(f"DEBUG: Box Drawn: {real_x}, {real_y}, {real_w}x{real_h}")
+                print(f"[STATUS]: Box Drawn: {real_x}, {real_y}, {real_w}x{real_h}")
                 self.selection_finished.emit(real_x, real_y, real_w, real_h)
             
             # Clear visual box after release 

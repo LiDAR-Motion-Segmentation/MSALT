@@ -11,6 +11,10 @@ from src.ui.playback_widget import PlaybackWidget
 
 from src.core.annotation_manager import AnnotationManager
 from src.core.objects import BoundingBox3D
+from src.core.geometry import GeometryUtils
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MainWindow(QMainWindow):
     def __init__(self, data_controller: DataController):
@@ -18,12 +22,15 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("SALT: Sensor Fusion Annotator")
         self.resize(1920, 1080)
         self.data_controller = data_controller
-        
         self.annotation_manager = AnnotationManager()
         
         # trying dummy data
         # dummy_box = BoundingBox3D(x=0, y=0, z=-1, dx=4, dy=2, dz=1.5, heading=0.5)
         # self.annotation_manager.add_box(0, dummy_box)
+        
+        # State tracking
+        self.current_frame_idx = 0
+        self.current_frame_data = None # Cache the data for math ops
         
         # registery of active plugins
         self.plugins: List[BasePluginWidget] = []
@@ -37,10 +44,10 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         # assembling UI using dock widgets
 
-        # 1. Central Widget (Maybe a summary or empty for now, Docks are the main actors)
-        # Usually, the LiDAR view is the 'Central' widget
-        self.central_panel = QWidget()
-        self.setCentralWidget(self.central_panel)
+        # # 1. Central Widget (Maybe a summary or empty for now, Docks are the main actors)
+        # # Usually, the LiDAR view is the 'Central' widget
+        # self.central_panel = QWidget()
+        # self.setCentralWidget(self.central_panel)
 
         # We can hide the central widget if we want everything docked
         # self.central_panel.hide()
@@ -57,8 +64,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.lidar_widget)
         # Note: Since we set it as central, we don't add it to self.plugins list
         # automatically if we rely on that list for updates.
-        self.plugins.append(self.lidar_widget)
-        self.plugins.append(self.cam_widget)
+        # self.plugins.append(self.lidar_widget)
+        # self.plugins.append(self.cam_widget)
 
         # 3. Playback Controls (Bottom Dock)
         self.playback = PlaybackWidget()
@@ -79,6 +86,7 @@ class MainWindow(QMainWindow):
     def _connect_signals(self):
         # Wiring the Playback -> Controller -> UI.
         self.playback.frame_changed.connect(self.load_frame)
+        self.cam_widget.box_drawn.connect(self.handle_annotation)
 
     def load_frame(self, idx: int):
         """
@@ -86,8 +94,49 @@ class MainWindow(QMainWindow):
         1. Fetch Data
         2. Notify ALL Plugins
         """
-        frame_data = self.data_controller.get_frame(idx)
+        self.current_frame_idx = idx
+        self.current_frame_data = self.data_controller.get_frame(idx)
         boxes = self.annotation_manager.get_boxes(idx)
         for plugin in self.plugins:
-            plugin.on_frame_update(frame_data)
+            plugin.on_frame_update(self.current_frame_data)
+        self.lidar_widget.on_frame_update(self.current_frame_data)
         self.lidar_widget.update_boxes(boxes)
+
+    def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int):
+        if self.current_frame_data is None or self.current_frame_data.point_cloud is None:
+            logger.warning("Cannot annotate: No point cloud data available.")
+            return
+        
+        calib = self.current_frame_data.metadata.get('calibration', {}).get(cam_id)
+        if not calib:
+            logger.error(f"No calibration found for {cam_id}")
+            return
+            
+        K = calib['intrinsic']
+        T = calib['extrinsic']
+        
+        if K is None or T is None:
+            logger.error(f"Calibration incomplete for {cam_id}")
+            return
+        
+        # Filter Points (Frustum Culling)
+        points = self.current_frame_data.point_cloud
+        mask = GeometryUtils.get_frustum_points(points, (x, y, w, h), K, T)
+        
+        selected_points = points[mask]
+        logger.info(f"Annotation: Selected {len(selected_points)} points inside 2D box.")
+        
+        # fit 3D box
+        box_params = GeometryUtils.fit_box_to_cloud(selected_points)
+        
+        if box_params:
+            # Create the Box Object
+            new_box = BoundingBox3D(**box_params)
+            new_box.label = "Auto-Object"
+            
+            # Save and Refresh
+            self.annotation_manager.add_box(self.current_frame_idx, new_box)
+            self.load_frame(self.current_frame_idx) # Redraw UI
+            logger.info(f"Created Box at {new_box.x:.2f}, {new_box.y:.2f}, {new_box.z:.2f}")
+        else:
+            logger.warning("No points found inside the box selection.")
