@@ -12,9 +12,11 @@ from src.ui.playback_widget import PlaybackWidget
 from src.core.annotation_manager import AnnotationManager
 from src.core.objects import BoundingBox3D
 from src.core.geometry import GeometryUtils
+from src.core.segmentation import SegmentationEngine
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 class MainWindow(QMainWindow):
     def __init__(self, data_controller: DataController):
@@ -23,15 +25,16 @@ class MainWindow(QMainWindow):
         self.resize(1920, 1080)
         self.data_controller = data_controller
         self.annotation_manager = AnnotationManager()
-        
+        self.seg_engine = SegmentationEngine(self.data_controller.cfg.models)
+
         # trying dummy data
         # dummy_box = BoundingBox3D(x=0, y=0, z=-1, dx=4, dy=2, dz=1.5, heading=0.5)
         # self.annotation_manager.add_box(0, dummy_box)
-        
+
         # State tracking
         self.current_frame_idx = 0
-        self.current_frame_data = None # Cache the data for math ops
-        
+        self.current_frame_data = None  # Cache the data for math ops
+
         # registery of active plugins
         self.plugins: List[BasePluginWidget] = []
 
@@ -40,7 +43,7 @@ class MainWindow(QMainWindow):
 
         if self.data_controller.get_total_frames() > 0:
             self.load_frame(0)
-            
+
     def _init_ui(self):
         # assembling UI using dock widgets
 
@@ -103,40 +106,59 @@ class MainWindow(QMainWindow):
         self.lidar_widget.update_boxes(boxes)
 
     def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int):
-        if self.current_frame_data is None or self.current_frame_data.point_cloud is None:
+        # Logic: Box -> SAM2 Mask -> 3D Projection -> Box Fit
+        if (
+            self.current_frame_data is None
+            or self.current_frame_data.point_cloud is None
+        ):
             logger.warning("Cannot annotate: No point cloud data available.")
             return
-        
-        calib = self.current_frame_data.metadata.get('calibration', {}).get(cam_id)
+
+        calib = self.current_frame_data.metadata.get("calibration", {}).get(cam_id)
         if not calib:
             logger.error(f"No calibration found for {cam_id}")
             return
-            
-        K = calib['intrinsic']
-        T = calib['extrinsic']
-        
+
+        K = calib["intrinsic"]
+        T = calib["extrinsic"]
+
         if K is None or T is None:
             logger.error(f"Calibration incomplete for {cam_id}")
             return
-        
+
+        # the actual RGB image array for the model
+        image = self.current_frame_data.images.get(cam_id)
+        if image is None:
+            logger.error(f"Image not found for {cam_id}")
+            return
+
+        logger.info(f"Running SAM2 on {cam_id}...")
+
+        # Generate Mask (AI Step)
+        mask = self.seg_engine.get_mask_from_box(image, [x, y, w, h])
+
         # Filter Points (Frustum Culling)
         points = self.current_frame_data.point_cloud
-        mask = GeometryUtils.get_frustum_points(points, (x, y, w, h), K, T)
-        
-        selected_points = points[mask]
-        logger.info(f"Annotation: Selected {len(selected_points)} points inside 2D box.")
-        
+        mask_3d = GeometryUtils.get_points_in_mask(points, mask, K, T)
+
+        selected_points = points[mask_3d]
+        logger.info(
+            f"Annotation: Selected {len(selected_points)} points inside 2D box."
+        )
+
         # fit 3D box
         box_params = GeometryUtils.fit_box_to_cloud(selected_points)
-        
+
         if box_params:
             # Create the Box Object
             new_box = BoundingBox3D(**box_params)
-            new_box.label = "Auto-Object"
-            
+            new_box.label = "Person"
+
             # Save and Refresh
             self.annotation_manager.add_box(self.current_frame_idx, new_box)
-            self.load_frame(self.current_frame_idx) # Redraw UI
-            logger.info(f"Created Box at {new_box.x:.2f}, {new_box.y:.2f}, {new_box.z:.2f}")
+            self.load_frame(self.current_frame_idx)  # Redraw UI
+            logger.info(
+                f"Created Box at {new_box.x:.2f}, {new_box.y:.2f}, {new_box.z:.2f}"
+            )
         else:
-            logger.warning("No points found inside the box selection.")
+            logger.warning("No 3D points found inside the mask.")

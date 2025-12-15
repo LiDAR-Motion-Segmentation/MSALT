@@ -8,11 +8,12 @@ from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
 from src.ui.components.drawable_label import DrawableLabel
 
+
 class CameraStripWidget(BasePluginWidget):
-    
+
     # New Signal: (CameraID, x, y, w, h)
     box_drawn = pyqtSignal(str, int, int, int, int)
-    
+
     def __init__(self, camera_ids: List[str]):
         super().__init__(title="camera strip")
         self.camera_ids = camera_ids
@@ -44,7 +45,7 @@ class CameraStripWidget(BasePluginWidget):
             lbl_img.setMinimumSize(320, 240)
             lbl_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl_img.setScaledContents(True)
-            
+
             lbl_img.selection_finished.connect(
                 lambda x, y, w, h, cid=cam_id: self.box_drawn.emit(cid, x, y, w, h)
             )

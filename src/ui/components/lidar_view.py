@@ -26,10 +26,10 @@ class LidarVisualizer(BasePluginWidget):
         # Scatter Plot (The Point Cloud)
         self.scatter = gl.GLScatterPlotItem()
         self.view_widget.addItem(self.scatter)
-        
+
         # Bounding Box Container (We will add/remove line items here)
         self.box_items = []
-        
+
         layout.addWidget(self.view_widget)
 
     def on_frame_update(self, data: FrameData) -> None:
@@ -44,34 +44,41 @@ class LidarVisualizer(BasePluginWidget):
             colors[:, 1] = 0.5
 
             self.scatter.setData(pos=points, color=colors, size=2)
-            
+
     def update_boxes(self, boxes: list[BoundingBox3D]):
         # clear old boxes
         for item in self.box_items:
             self.view_widget.removeItem(item)
         self.box_items.clear()
-        
+
         # Draw new boxes
         # Connectivity for a cube wireframe (lines between corner indices)
         # Corners are 0-7.
-        lines_indices = np.array([
-            [0,1], [1,2], [2,3], [3,0], # Bottom face
-            [4,5], [5,6], [6,7], [7,4], # Top face
-            [0,4], [1,5], [2,6], [3,7]  # Vertical pillars
-        ])
-        
+        lines_indices = np.array(
+            [
+                [0, 1],
+                [1, 2],
+                [2, 3],
+                [3, 0],  # Bottom face
+                [4, 5],
+                [5, 6],
+                [6, 7],
+                [7, 4],  # Top face
+                [0, 4],
+                [1, 5],
+                [2, 6],
+                [3, 7],  # Vertical pillars
+            ]
+        )
+
         for box in boxes:
-            corners = box.get_corners() # (8, 3)
-        
+            corners = box.get_corners()  # (8, 3)
+
             # create line item
             line_item = gl.GLLinePlotItem(
-                pos=corners,
-                mode='lines',
-                color=box.color,
-                width=2,
-                antialias=True
+                pos=corners, mode="lines", color=box.color, width=2, antialias=True
             )
-        
+
             # GLLinePlotItem usually takes a list of points in sequence for 'lines' mode
             # Construct line pairs manually for GLLinePlotItem to be safe
             pts = []
@@ -79,9 +86,9 @@ class LidarVisualizer(BasePluginWidget):
                 pts.append(corners[start])
                 pts.append(corners[end])
             pts = np.array(pts)
-            
+
             line_item.setData(pos=pts, color=np.tile(box.color, (len(pts), 1)))
-            
+
             self.view_widget.addItem(line_item)
             self.box_items.append(line_item)
 
