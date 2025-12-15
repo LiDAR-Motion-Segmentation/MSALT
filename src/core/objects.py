@@ -1,8 +1,7 @@
 from dataclasses import dataclass, field
-from turtle import heading
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from typing import Tuple
+from typing import Tuple, Optional, Dict
 
 
 @dataclass
@@ -22,6 +21,9 @@ class BoundingBox3D:
 
     # State
     selected: bool = False
+    point_indices: Optional[np.ndarray] = None
+    
+    source_2d: Optional[Dict] = None
 
     def get_corners(self) -> np.ndarray:
         """

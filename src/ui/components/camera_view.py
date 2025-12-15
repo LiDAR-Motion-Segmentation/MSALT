@@ -76,3 +76,17 @@ class CameraStripWidget(BasePluginWidget):
         for lbl in self.image_labels.values():
             lbl.clear()
             lbl.setText("No Data")
+
+    def update_2d_boxes(self, boxes_map: Dict[str, List[list]]):
+        """
+        Args:
+            boxes_map: {'CAM_1': [[x,y,w,h], ...], 'CAM_2': ...}
+        """
+        # Clear all first
+        for lbl in self.image_labels.values():
+            lbl.set_static_rects([])
+            
+        # Set new ones
+        for cam_id, rects in boxes_map.items():
+            if cam_id in self.image_labels:
+                self.image_labels[cam_id].set_static_rects(rects)

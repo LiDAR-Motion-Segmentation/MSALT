@@ -15,6 +15,7 @@ from src.core.geometry import GeometryUtils
 from src.core.segmentation import SegmentationEngine
 import logging
 import numpy as np
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +102,20 @@ class MainWindow(QMainWindow):
         self.current_frame_idx = idx
         self.current_frame_data = self.data_controller.get_frame(idx)
         boxes = self.annotation_manager.get_boxes(idx)
+        boxes_2d_map = defaultdict(list)
+        
+        # prepare 2D Box Map for Camera View
+        for box in boxes:
+            if box.source_2d:
+                cam_id = box.source_2d['cam_id']
+                rect = box.source_2d['rect']
+                boxes_2d_map[cam_id].append(rect)
+                
+        # update for plugins
         for plugin in self.plugins:
             plugin.on_frame_update(self.current_frame_data)
+        
+        self.cam_widget.update_2d_boxes(boxes_2d_map)    
         self.lidar_widget.on_frame_update(self.current_frame_data)
         self.lidar_widget.update_boxes(boxes)
 
@@ -121,9 +134,11 @@ class MainWindow(QMainWindow):
             return
 
         K = calib["intrinsic"]
-        T = calib["extrinsic"]
+        
+        # This is Cam->World pose
+        camera_pos = calib["extrinsic"]
 
-        if K is None or T is None:
+        if K is None or camera_pos is None:
             logger.error(f"Calibration incomplete for {cam_id}")
             return
 
@@ -140,7 +155,7 @@ class MainWindow(QMainWindow):
 
         # Filter Points (Frustum Culling)
         points = self.current_frame_data.point_cloud
-        mask_3d = GeometryUtils.get_points_in_mask(points, mask, K, T)
+        mask_3d = GeometryUtils.get_points_in_mask(points, mask, K, camera_pos)
 
         selected_points = points[mask_3d]
         logger.info(
@@ -155,6 +170,12 @@ class MainWindow(QMainWindow):
             new_box = BoundingBox3D(**box_params)
             new_box.label = "Person"
 
+            # Save indices for Red Coloring
+            new_box.point_indices = np.where(mask_3d)[0]
+            
+            # Save 2D Rect for Cyan Box
+            new_box.source_2d = {'cam_id': cam_id, 'rect': [x, y, w, h]}
+            
             # Save and Refresh
             self.annotation_manager.add_box(self.current_frame_idx, new_box)
             self.load_frame(self.current_frame_idx)  # Redraw UI
@@ -164,47 +185,3 @@ class MainWindow(QMainWindow):
             )
         else:
             logger.warning("No 3D points found inside the mask.")
-
-    def debug_draw_frustum(self, cam_id, box_2d):
-        """
-        Draws 4 lines from the camera center to the corners of the 2D box
-        projected into 3D space. This VISUALLY proves where your math is pointing.
-        """
-        calib = self.current_frame_data.metadata['calibration'][cam_id]
-        K, T = calib['intrinsic'], calib['extrinsic']
-        x, y, w, h = box_2d
-        
-        # 1. Camera Center (0,0,0 in Camera Frame)
-        # Transform 0,0,0 from Camera -> Lidar Frame (Inverse T)
-        T_inv = np.linalg.inv(T)
-        cam_origin = T_inv[:3, 3] # The XYZ of the camera itself
-        
-        # 2. Get Corners in Normalized Image Coordinates
-        # (u - cx) / fx, (v - cy) / fy
-        # Fast way: use K_inv
-        corners_2d = np.array([
-            [x, y, 1],         # Top-Left
-            [x+w, y, 1],       # Top-Right
-            [x+w, y+h, 1],     # Bottom-Right
-            [x, y+h, 1]        # Bottom-Left
-        ]).T # (3, 4)
-        
-        K_inv = np.linalg.inv(K)
-        rays_cam = K_inv @ corners_2d # (3, 4) -> Rays in Camera Frame
-        
-        # 3. Transform Rays to World (Lidar) Frame
-        # We represent rays as points at Z=10 meters to draw lines
-        rays_cam = rays_cam * 10.0 # Scale rays out
-        
-        # Transform these endpoints
-        # geometry needs (N, 3), so transpose rays to (4, 3)
-        rays_world = GeometryUtils.transform_points(rays_cam.T, T_inv)
-        
-        # 4. Draw Lines (Origin -> Ray Endpoints)
-        lines = []
-        for end_pt in rays_world:
-            lines.append(np.array([cam_origin, end_pt]))
-            
-        # Draw on Lidar Widget (Red Lines)
-        # (We assume lidar_widget has a method to draw debug lines, or we add one)
-        self.lidar_widget.draw_debug_lines(lines)

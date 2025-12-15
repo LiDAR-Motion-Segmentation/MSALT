@@ -24,10 +24,17 @@ class DrawableLabel(QLabel):
         # orginal resolution (set when image is updated)
         self.orig_width = 1
         self.orig_height = 1
+        
+        # List of [x, y, w, h] in ORIGINAL coordinates
+        self.static_rects = []
 
     def set_original_resolution(self, w: int, h: int) -> None:
         self.orig_width = w
         self.orig_height = h
+        
+    def set_static_rects(self, rects_list):
+        self.static_rects = rects_list
+        self.update()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -80,16 +87,28 @@ class DrawableLabel(QLabel):
     def paintEvent(self, event):
         # draw the image
         super().paintEvent(event)
+        painter = QPainter(self)
 
-        # draw the box on top
+        # Calculate Scale
+        scale_x = self.width() / self.orig_width
+        scale_y = self.height() / self.orig_height
+        
+        # Draw STATIC Boxes (The ones saved) - Cyan/Blue
+        pen_static = QPen(QColor(0, 255, 255), 2) # Cyan
+        painter.setPen(pen_static)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        
+        for (rx, ry, rw, rh) in self.static_rects:
+            # Scale back to screen coords
+            sx = int(rx * scale_x)
+            sy = int(ry * scale_y)
+            sw = int(rw * scale_x)
+            sh = int(rh * scale_y)
+            painter.drawRect(sx, sy, sw, sh)
+
+        # Draw ACTIVE Rubberband (The one you are dragging) - Green
         if self.current_rect and self.is_drawing:
-            painter = QPainter(self)
-            pen = QPen(QColor(0, 255, 0), 2)  # green border
-            pen.setStyle(Qt.PenStyle.SolidLine)
+            pen = QPen(QColor(0, 255, 0), 2)
             painter.setPen(pen)
-
-            # semi-transparent fill
-            brush_color = QColor(0, 255, 0, 50)
-            painter.setBrush(brush_color)
-
+            painter.setBrush(QColor(0, 255, 0, 50))
             painter.drawRect(self.current_rect)

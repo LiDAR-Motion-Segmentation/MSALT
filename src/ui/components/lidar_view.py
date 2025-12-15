@@ -14,6 +14,7 @@ class LidarVisualizer(BasePluginWidget):
         self.current_boxes = []
         self.box_items = []
         self.debug_items = []
+        self.current_points = None 
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -36,16 +37,16 @@ class LidarVisualizer(BasePluginWidget):
 
     def on_frame_update(self, data: FrameData) -> None:
         if data.point_cloud is not None:
-            points = data.point_cloud  # (N, 3)
+            self.current_points = data.point_cloud  # (N, 3)
 
             # Color Map Logic (Height Based)
             # Optimization: need to do this in C++ or use a pre-computed texture
-            z = points[:, 2]
-            colors = np.ones((points.shape[0], 4))
-            colors[:, 0] = np.clip((z + 2) / 5, 0, 1)  # Red gradient
-            colors[:, 1] = 0.5
+            z = self.current_points[:, 2]
+            colors = np.ones((self.current_points.shape[0], 4))
+            colors[:, 0] = np.clip((z + 2) / 5, 0, 1) # R
+            colors[:, 1] = 0.5                        # G
 
-            self.scatter.setData(pos=points, color=colors, size=2)
+            self.scatter.setData(pos=self.current_points, color=colors, size=2)
 
     def update_boxes(self, boxes: list[BoundingBox3D]):
         # clear old boxes
@@ -53,6 +54,22 @@ class LidarVisualizer(BasePluginWidget):
             self.view_widget.removeItem(item)
         self.box_items.clear()
 
+        # Re-Color Point Cloud (Highlight Selected Points)
+        if self.current_points is not None:
+            # Reset to default colors first
+            z = self.current_points[:, 2]
+            colors = np.ones((len(z), 4))
+            colors[:, 0] = np.clip((z + 2) / 5, 0, 1)
+            colors[:, 1] = 0.5
+            
+            for box in boxes:
+                if box.point_indices is not None:
+                    # Color these points RED
+                    colors[box.point_indices] = [1.0, 0.0, 0.0, 1.0]
+            
+            # Update the scatter plot
+            self.scatter.setData(pos=self.current_points, color=colors, size=2)
+        
         # Draw new boxes
         # Connectivity for a cube wireframe (lines between corner indices)
         # Corners are 0-7.
@@ -76,20 +93,19 @@ class LidarVisualizer(BasePluginWidget):
         for box in boxes:
             corners = box.get_corners()  # (8, 3)
 
-            # create line item
-            line_item = gl.GLLinePlotItem(
-                pos=corners, mode="lines", color=box.color, width=2, antialias=True
-            )
-
             # GLLinePlotItem usually takes a list of points in sequence for 'lines' mode
             # Construct line pairs manually for GLLinePlotItem to be safe
             pts = []
             for start, end in lines_indices:
                 pts.append(corners[start])
                 pts.append(corners[end])
+            
             pts = np.array(pts)
 
-            line_item.setData(pos=pts, color=np.tile(box.color, (len(pts), 1)))
+            # create line item
+            line_item = gl.GLLinePlotItem(
+                pos=pts, mode="lines", color=box.color, width=2, antialias=True
+            )
 
             self.view_widget.addItem(line_item)
             self.box_items.append(line_item)
