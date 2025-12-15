@@ -20,7 +20,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 uv run main.py
 ```
-![alt text](./assets/ui_v1.png)
+![alt text](./assets/ui_v2.png)
 
 ## Directory Structure
 ```
