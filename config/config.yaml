@@ -1,7 +1,8 @@
 defaults:
   - salt_setup: husky_setup  
+  - models: default
   - _self_
 
 app:
-  window_title: "SALT annotator"
+  window_title: "SALT: Sensor Fusion Annotator"
   window_size: [1600, 900]
