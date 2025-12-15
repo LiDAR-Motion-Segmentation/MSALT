@@ -12,6 +12,8 @@ class LidarVisualizer(BasePluginWidget):
         super().__init__(title="LiDAR 3D View")
         self._setup_ui()
         self.current_boxes = []
+        self.box_items = []
+        self.debug_items = []
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -94,3 +96,37 @@ class LidarVisualizer(BasePluginWidget):
 
     def reset(self):
         self.scatter.setData(pos=np.zeros((0, 3)))
+
+    def draw_debug_lines(self, lines_list):
+        """Draws persistent debug rays."""
+        # 1. Clear OLD debug lines (so we don't have 1000 lines cluttering)
+        for item in self.debug_items:
+            self.view_widget.removeItem(item)
+        self.debug_items.clear()
+
+        if not lines_list:
+            return
+
+        # 2. Prepare Data
+        pts = []
+        for line in lines_list:
+            pts.append(line[0]) # Start (Camera Origin)
+            pts.append(line[1]) # End (Frustum corner)
+        
+        pts_arr = np.array(pts)
+        
+        # 3. Debug Print (Check console!)
+        print(f"DEBUG: Drawing {len(lines_list)} lines.")
+        print(f"DEBUG: Start Point (Cam): {pts_arr[0]}")
+        print(f"DEBUG: End Point (Ray): {pts_arr[1]}")
+
+        # 4. Draw
+        line_item = gl.GLLinePlotItem(
+            pos=pts_arr,
+            mode='lines',
+            color=(1, 0, 0, 1), # Bright Red
+            width=3,            # Thicker lines
+            antialias=True
+        )
+        self.view_widget.addItem(line_item)
+        self.debug_items.append(line_item)

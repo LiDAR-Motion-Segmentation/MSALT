@@ -1,8 +1,41 @@
 import numpy as np
 import open3d as o3d
-
+from sklearn.cluster import DBSCAN
 
 class GeometryUtils:
+    @staticmethod
+    def project_lidar_to_image(xyz: np.ndarray,
+                               camera_pose: np.ndarray,
+                               intr: np.ndarray):
+        """
+        Projects 3D LiDAR points onto the 2D Image Plane.
+        
+        Args:
+            xyz: (N, 3) LiDAR points
+            camera_pose: (4, 4) Matrix (Camera -> World/LiDAR)
+            intr: (3, 3) Intrinsic Matrix
+            
+        Returns:
+            uv: (N, 2) Projected pixel coordinates
+            valid: (N,) Boolean mask (True if point is in front of camera)
+        """
+        pts_h = np.hstack([xyz, np.ones((xyz.shape[0], 1))])
+        T_inv = np.linalg.inv(camera_pose)
+        pts_cam = (T_inv @ pts_h.T).T[:, :3]
+        z = pts_cam[:, 2]
+        valid = z > 0
+        pts_cam_valid = pts_cam[valid]
+        proj = (intr @ pts_cam_valid.T).T  # (M, 3)
+        
+        # Normalize: x/z, y/z
+        uv_valid = proj[:, :2] / proj[:, 2:3]
+        
+        # Map back to full size array
+        uv = np.zeros((xyz.shape[0], 2), dtype=np.float32)
+        uv[valid] = uv_valid
+        
+        return uv, valid
+    
     @staticmethod
     def pixel_to_ray(u: float, v: float, K_inv: np.ndarray) -> np.ndarray:
         """
@@ -97,102 +130,110 @@ class GeometryUtils:
         return final_mask
 
     @staticmethod
-    def fit_box_to_cloud(points: np.ndarray) -> dict:
+    def fit_box_to_cloud(points: np.ndarray, eps: float = 0.5, min_samples: int = 8) -> dict:
         """
-        Fits a box to the PRIMARY object in the point cloud.
-        Uses DBSCAN clustering to separate the foreground object from background noise.
+        Clusters points using DBSCAN and fits a box to the largest cluster.
+        Using params from your script: eps=0.5, min_samples=8
         """
         if len(points) < 5:
             return None
 
+        db = DBSCAN(eps=eps, min_samples=min_samples)
+        labels = db.fit_predict(points)
+
+        unique_labels = set(labels)
+        if -1 in unique_labels:
+            unique_labels.remove(-1) # Remove noise
+            
+        if not unique_labels:
+            return None # Only noise found
+
+        # Heuristic: Pick the cluster closest to the sensor origin (0,0,0)
+        best_cluster_pts = None
+        min_dist = float('inf')
+        
+        for lbl in unique_labels:
+            cluster_pts = points[labels == lbl]
+            # Dist to origin
+            dist = np.linalg.norm(np.mean(cluster_pts, axis=0))
+            if dist < min_dist:
+                min_dist = dist
+                best_cluster_pts = cluster_pts
+                
+        if best_cluster_pts is None:
+            return None
+
+        # Use Open3D for robust OBB fitting
         pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points)
+        pcd.points = o3d.utility.Vector3dVector(best_cluster_pts)
+        
+        try:
+            obb = pcd.get_oriented_bounding_box()
+        except RuntimeError:
+            return None # Degenerate points
 
-        # Returns a list where labels[i] is the cluster ID of point i. -1 is noise.
-        labels = np.array(
-            pcd.cluster_dbscan(eps=0.5, min_points=10, print_progress=False)
-        )
-
-        if labels.max() == -1:
-            print("[STATUS]: Clustering found only noise.")
-        else:
-            unique_labels = np.unique(labels)
-            unique_labels = unique_labels[unique_labels != -1]  # Filter out noise
-
-            best_cluster_points = points
-            min_mean_dist = float("inf")
-
-            for lbl in unique_labels:
-                cluster_mask = labels == lbl
-                cluster_pts = points[cluster_mask]
-
-                # Calculate distance to origin (LiDAR/Camera position)
-                # We use the centroid of the cluster.
-                dist = np.linalg.norm(np.mean(cluster_pts, axis=0))
-
-                if dist < min_mean_dist:
-                    min_mean_dist = dist
-                    best_cluster_points = cluster_pts
-
-            # Use the refined points
-            points = best_cluster_points
-
-        # Use percentiles to ignore outlier noise within the cluster itself
-        min_p = np.percentile(points, 2, axis=0)
-        max_p = np.percentile(points, 98, axis=0)
-
-        center = (min_p + max_p) / 2
-        dims = max_p - min_p
-
-        # Sanity Check: Minimum size 10cm (prevents flat paper boxes)
-        dims = np.maximum(dims, [0.1, 0.1, 0.1])
-
-        # Create args for BoundingBox3D
+        # Extract params
+        center = obb.center
+        extent = obb.extent
+        R_mat = obb.R
+        
+        # Calculate yaw (heading) from Rotation Matrix
+        # Heading is rotation around Z. 
+        # R = [[cos, -sin, 0], [sin, cos, 0], ..]
+        heading = np.arctan2(R_mat[1, 0], R_mat[0, 0])
+        
+        # Apply your script's specific scaling offsets if you want exact parity
+        dx = max(0.1, extent[0] - 0.59) # Safety: prevent negative size
+        dy = extent[1]
+        dz = extent[2] + 1.17
+        
         return {
-            "x": center[0],
-            "y": center[1],
-            "z": center[2],
-            "dx": dims[0],
-            "dy": dims[1],
-            "dz": dims[2],
-            "heading": 0.0,  # Default to 0 for now (AABB)
+            'x': center[0], 'y': center[1], 'z': center[2],
+            'dx': dx, 'dy': dy, 'dz': dz,
+            'heading': heading
         }
 
     @staticmethod
     def get_points_in_mask(
-        points: np.ndarray, mask: np.ndarray, K: np.ndarray, T: np.ndarray
+        points: np.ndarray, mask: np.ndarray, intr: np.ndarray, camera_pose: np.ndarray
     ) -> np.ndarray:
-        if len(points) == 0:
-            return np.zeros(0, dtype=bool)
-        pts_cam = GeometryUtils.transform_points(points, T)
-        valid_z = pts_cam[:, 2] > 0.1
-
-        if not np.any(valid_z):
-            return np.zeros(len(points), dtype=bool)
-
-        pts_valid = pts_cam[valid_z]
-
-        # projecting to pixels
-        pts_pro = pts_valid @ K.T
-        z_vals = pts_valid[:, 2]
-        u = (pts_pro[:, 0] / z_vals).astype(int)
-        v = (pts_pro[:, 1] / z_vals).astype(int)
-
-        # Filter points strictly inside image bounds
+        """
+        Selects 3D points that project onto the 'True' pixels of a 2D mask.
+        Implements your 'mask_point_indices' logic.
+        """
+        # 1. Project ALL points to image plane
+        uv, valid = GeometryUtils.project_lidar_to_image(points, camera_pose, intr)
+        
         h, w = mask.shape
-        in_bounds = (u >= 0) & (u < w) & (v >= 0) & (v < h)
-
-        subset_mask = np.zeros(len(pts_valid), dtype=bool)
-
-        # Only check indices that are within bounds
-        valid_u = u[in_bounds]
-        valid_v = v[in_bounds]
-
-        # mask[row, col] -> mask[v, u]
-        subset_mask[in_bounds] = mask[valid_v, valid_u]
-
-        # Expand back to original size (N,)
-        final_mask = np.zeros(len(points), dtype=bool)
-        final_mask[valid_z] = subset_mask
-
-        return final_mask
+        
+        # 2. Convert to integer pixels
+        pixel_uv = np.round(uv).astype(int)
+        
+        # 3. Check Image Bounds (Vectorized)
+        # We only check points that were already valid (z > 0)
+        in_img_bounds = (
+            (pixel_uv[:, 0] >= 0) & 
+            (pixel_uv[:, 0] < w) & 
+            (pixel_uv[:, 1] >= 0) & 
+            (pixel_uv[:, 1] < h)
+        )
+        
+        # Combine: Must be in front of cam AND inside image frame
+        final_candidates_mask = valid & in_img_bounds
+        
+        # 4. Check Mask Value
+        # Extract u,v indices for candidate points
+        valid_u = pixel_uv[final_candidates_mask, 0]
+        valid_v = pixel_uv[final_candidates_mask, 1]
+        
+        # Check if mask is 1 at these coordinates
+        # mask[v, u] because numpy is (row, col)
+        is_in_mask = mask[valid_v, valid_u] == 1
+        
+        # 5. Create Final 3D Mask
+        # Start with all False
+        mask_3d = np.zeros(len(points), dtype=bool)
+        # Only set True for the candidates that passed the mask check
+        mask_3d[final_candidates_mask] = is_in_mask
+        
+        return mask_3d

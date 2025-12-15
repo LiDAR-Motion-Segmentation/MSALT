@@ -14,6 +14,7 @@ from src.core.objects import BoundingBox3D
 from src.core.geometry import GeometryUtils
 from src.core.segmentation import SegmentationEngine
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ class MainWindow(QMainWindow):
             return
 
         logger.info(f"Running SAM2 on {cam_id}...")
-
+        
         # Generate Mask (AI Step)
         mask = self.seg_engine.get_mask_from_box(image, [x, y, w, h])
 
@@ -157,8 +158,53 @@ class MainWindow(QMainWindow):
             # Save and Refresh
             self.annotation_manager.add_box(self.current_frame_idx, new_box)
             self.load_frame(self.current_frame_idx)  # Redraw UI
+            # self.debug_draw_frustum(cam_id, [x, y, w, h])
             logger.info(
                 f"Created Box at {new_box.x:.2f}, {new_box.y:.2f}, {new_box.z:.2f}"
             )
         else:
             logger.warning("No 3D points found inside the mask.")
+
+    def debug_draw_frustum(self, cam_id, box_2d):
+        """
+        Draws 4 lines from the camera center to the corners of the 2D box
+        projected into 3D space. This VISUALLY proves where your math is pointing.
+        """
+        calib = self.current_frame_data.metadata['calibration'][cam_id]
+        K, T = calib['intrinsic'], calib['extrinsic']
+        x, y, w, h = box_2d
+        
+        # 1. Camera Center (0,0,0 in Camera Frame)
+        # Transform 0,0,0 from Camera -> Lidar Frame (Inverse T)
+        T_inv = np.linalg.inv(T)
+        cam_origin = T_inv[:3, 3] # The XYZ of the camera itself
+        
+        # 2. Get Corners in Normalized Image Coordinates
+        # (u - cx) / fx, (v - cy) / fy
+        # Fast way: use K_inv
+        corners_2d = np.array([
+            [x, y, 1],         # Top-Left
+            [x+w, y, 1],       # Top-Right
+            [x+w, y+h, 1],     # Bottom-Right
+            [x, y+h, 1]        # Bottom-Left
+        ]).T # (3, 4)
+        
+        K_inv = np.linalg.inv(K)
+        rays_cam = K_inv @ corners_2d # (3, 4) -> Rays in Camera Frame
+        
+        # 3. Transform Rays to World (Lidar) Frame
+        # We represent rays as points at Z=10 meters to draw lines
+        rays_cam = rays_cam * 10.0 # Scale rays out
+        
+        # Transform these endpoints
+        # geometry needs (N, 3), so transpose rays to (4, 3)
+        rays_world = GeometryUtils.transform_points(rays_cam.T, T_inv)
+        
+        # 4. Draw Lines (Origin -> Ray Endpoints)
+        lines = []
+        for end_pt in rays_world:
+            lines.append(np.array([cam_origin, end_pt]))
+            
+        # Draw on Lidar Widget (Red Lines)
+        # (We assume lidar_widget has a method to draw debug lines, or we add one)
+        self.lidar_widget.draw_debug_lines(lines)
