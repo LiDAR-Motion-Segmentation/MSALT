@@ -58,3 +58,6 @@ uv run main.py
 │       ├── playback_widget.py
 └── uv.lock
 ```
+
+## Working
+![alt text](./assets/flowchart_v1.png)
