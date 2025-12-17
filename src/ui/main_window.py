@@ -2,7 +2,7 @@ from tkinter import Widget
 from typing import List
 from PyQt6.QtWidgets import QMainWindow, QDockWidget, QWidget, QVBoxLayout
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence, QShortcut
 from pathlib import Path
 
 from src.data.data_controller import DataController
@@ -85,6 +85,18 @@ class MainWindow(QMainWindow):
         # Connect Signals
         self.list_panel.box_selected.connect(self.on_box_selected)
         self.list_panel.box_deleted.connect(self.on_box_deleted)
+        
+        # Right Arrow -> Next Frame
+        self.shortcut_next = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
+        self.shortcut_next.activated.connect(self.next_frame)
+
+        # Left Arrow -> Previous Frame
+        self.shortcut_prev = QShortcut(QKeySequence(Qt.Key.Key_Left), self)
+        self.shortcut_prev.activated.connect(self.prev_frame)
+        
+        # Spacebar -> Play/Pause
+        self.shortcut_play = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
+        self.shortcut_play.activated.connect(self.toggle_play)
         
     def save_current_work(self):
         """Saves the JSON for the current frame."""
@@ -232,3 +244,41 @@ class MainWindow(QMainWindow):
             )
         else:
             logger.warning("No 3D points found inside the mask.")
+            
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        # right arrow -> Next Frame
+        if event.key() == Qt.Key.Key_Right:
+            total_frames = self.data_controller.get_total_frames()
+            if self.current_frame_idx < total_frames - 1:
+                self.load_frame(self.current_frame_idx + 1)
+                # Update slider position visually
+                self.playback.slider.setValue(self.current_frame_idx)
+                
+        # left arrow -> Previous Frame
+        elif event.key() == Qt.Key.Key_Left:
+            if self.current_frame_idx > 0:
+                self.load_frame(self.current_frame_idx - 1)
+                self.playback.slider.setValue(self.current_frame_idx)
+        
+        else:
+            super().keyPressEvent(event)
+            
+    def next_frame(self):
+        total = self.data_controller.get_total_frames()
+        if self.current_frame_idx < total - 1:
+            new_idx = self.current_frame_idx + 1
+            self.load_frame(new_idx)
+            # Sync the slider
+            self.playback.slider.setValue(new_idx)
+
+    def prev_frame(self):
+        if self.current_frame_idx > 0:
+            new_idx = self.current_frame_idx - 1
+            self.load_frame(new_idx)
+            # Sync the slider
+            self.playback.slider.setValue(new_idx)
+            
+    def toggle_play(self):
+        # Assuming PlaybackWidget has a toggle method, or you simulate the button click
+        if hasattr(self.playback, 'play_btn'):
+            self.playback.play_btn.click()
