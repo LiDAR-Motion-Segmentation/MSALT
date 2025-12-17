@@ -11,6 +11,7 @@ from src.ui.components.camera_view import CameraStripWidget
 from src.ui.components.lidar_view import LidarVisualizer
 from src.ui.playback_widget import PlaybackWidget
 from src.ui.components.annotation_list import AnnotationListWidget
+from src.ui.components.inspector_view import InspectorWidget
 
 from src.core.annotation_manager import AnnotationManager
 from src.core.objects import BoundingBox3D
@@ -98,6 +99,13 @@ class MainWindow(QMainWindow):
         self.shortcut_play = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
         self.shortcut_play.activated.connect(self.toggle_play)
         
+        # Inspector dock
+        self.inspector = InspectorWidget()
+        self.add_dock(self.inspector, "Inspector", Qt.DockWidgetArea.RightDockWidgetArea)
+        
+        # Connect: When Inspector changes a value, refresh the 3D view
+        self.inspector.box_changed.connect(self.on_box_edited)
+        
     def save_current_work(self):
         """Saves the JSON for the current frame."""
     
@@ -160,13 +168,18 @@ class MainWindow(QMainWindow):
         # Deselect all
         current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
         for b in current_boxes:
-            b.selected = False
-            
-        # Select target
-        box.selected = True
-        
+            b.selected = (b == box)
         # Redraw
         self.lidar_widget.update_boxes(current_boxes)
+        
+        # update inspector panel
+        self.inspector.set_box(box)
+        
+    def on_box_edited(self, box):
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        self.lidar_widget.update_boxes(current_boxes)
+        self.list_panel.update_list(current_boxes)
+        self.save_current_work()
         
     def on_box_deleted(self, box):
         # Remove box from manager and refresh.
