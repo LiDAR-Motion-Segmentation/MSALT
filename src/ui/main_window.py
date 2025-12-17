@@ -2,12 +2,15 @@ from tkinter import Widget
 from typing import List
 from PyQt6.QtWidgets import QMainWindow, QDockWidget, QWidget, QVBoxLayout
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction, QKeySequence
+from pathlib import Path
 
 from src.data.data_controller import DataController
 from src.ui.interfaces import BasePluginWidget
 from src.ui.components.camera_view import CameraStripWidget
 from src.ui.components.lidar_view import LidarVisualizer
 from src.ui.playback_widget import PlaybackWidget
+from src.ui.components.annotation_list import AnnotationListWidget
 
 from src.core.annotation_manager import AnnotationManager
 from src.core.objects import BoundingBox3D
@@ -48,31 +51,18 @@ class MainWindow(QMainWindow):
 
     def _init_ui(self):
         # assembling UI using dock widgets
-
-        # # 1. Central Widget (Maybe a summary or empty for now, Docks are the main actors)
-        # # Usually, the LiDAR view is the 'Central' widget
-        # self.central_panel = QWidget()
-        # self.setCentralWidget(self.central_panel)
-
-        # We can hide the central widget if we want everything docked
-        # self.central_panel.hide()
-
-        # 2. Initialize Plugins
-        # A. Camera Strip
+        
+        # Camera Strip
         cam_ids = self.data_controller.get_camera_ids()
         self.cam_widget = CameraStripWidget(cam_ids)
         self.add_dock(self.cam_widget, "Cameras", Qt.DockWidgetArea.TopDockWidgetArea)
 
-        # B. LiDAR View (Central focused)
+        # LiDAR View (Central focused)
         self.lidar_widget = LidarVisualizer()
         # We set LiDAR as the Main Central Widget for maximum space
         self.setCentralWidget(self.lidar_widget)
-        # Note: Since we set it as central, we don't add it to self.plugins list
-        # automatically if we rely on that list for updates.
-        # self.plugins.append(self.lidar_widget)
-        # self.plugins.append(self.cam_widget)
 
-        # 3. Playback Controls (Bottom Dock)
+        # Playback Controls (Bottom Dock)
         self.playback = PlaybackWidget()
         self.playback.setup_timeline(self.data_controller.get_total_frames())
 
@@ -81,6 +71,44 @@ class MainWindow(QMainWindow):
         dock_timeline.setWidget(self.playback)
         dock_timeline.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock_timeline)
+        
+        # Shortcut for saving
+        save_action = QAction("Save Annotations", self)
+        save_action.setShortcut(QKeySequence("Ctrl+S"))
+        save_action.triggered.connect(self.save_current_work)
+        self.addAction(save_action)
+        
+        # Annotation List Dock
+        self.list_panel = AnnotationListWidget()
+        self.add_dock(self.list_panel, "Annotations", Qt.DockWidgetArea.RightDockWidgetArea)
+        
+        # Connect Signals
+        self.list_panel.box_selected.connect(self.on_box_selected)
+        self.list_panel.box_deleted.connect(self.on_box_deleted)
+        
+    def save_current_work(self):
+        """Saves the JSON for the current frame."""
+    
+        output_dir = Path(self.data_controller.cfg.output.dir)
+        current_frame_name = f"frame_{self.current_frame_idx:06d}"
+        
+        if hasattr(self.data_controller, 'pcd_files'):
+            try:
+                pcd_path = self.data_controller.pcd_files[self.current_frame_idx]
+                current_frame_name = pcd_path.stem
+            except IndexError:
+                pass
+            
+        filename = f"{self.current_frame_idx:06d}.json"
+        
+        self.annotation_manager.save_frame_json(
+            self.current_frame_idx, 
+            output_dir, 
+            filename
+        )
+        
+        self.statusBar().showMessage(f"Saved: {filename}", 3000)
+        logger.info(f"Exported annotation to: {output_dir / filename}")
 
     def add_dock(self, widget: BasePluginWidget, title: str, area: Qt.DockWidgetArea):
         dock = QDockWidget(title, self)
@@ -94,11 +122,6 @@ class MainWindow(QMainWindow):
         self.cam_widget.box_drawn.connect(self.handle_annotation)
 
     def load_frame(self, idx: int):
-        """
-        Orchestrator:
-        1. Fetch Data
-        2. Notify ALL Plugins
-        """
         self.current_frame_idx = idx
         self.current_frame_data = self.data_controller.get_frame(idx)
         boxes = self.annotation_manager.get_boxes(idx)
@@ -118,6 +141,28 @@ class MainWindow(QMainWindow):
         self.cam_widget.update_2d_boxes(boxes_2d_map)    
         self.lidar_widget.on_frame_update(self.current_frame_data)
         self.lidar_widget.update_boxes(boxes)
+        self.list_panel.update_list(boxes)
+        
+    def on_box_selected(self, box):
+        # Highlight the box in 3D view when clicked in list.
+        # Deselect all
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        for b in current_boxes:
+            b.selected = False
+            
+        # Select target
+        box.selected = True
+        
+        # Redraw
+        self.lidar_widget.update_boxes(current_boxes)
+        
+    def on_box_deleted(self, box):
+        # Remove box from manager and refresh.
+        self.annotation_manager.delete_box(self.current_frame_idx, box)
+        self.load_frame(self.current_frame_idx) # Refresh view
+        
+        # Auto-save after delete 
+        self.save_current_work()
 
     def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int):
         # Logic: Box -> SAM2 Mask -> 3D Projection -> Box Fit
@@ -168,7 +213,7 @@ class MainWindow(QMainWindow):
         if box_params:
             # Create the Box Object
             new_box = BoundingBox3D(**box_params)
-            new_box.label = "Person"
+            new_box.label = self.list_panel.get_current_label()
 
             # Save indices for Red Coloring
             new_box.point_indices = np.where(mask_3d)[0]
@@ -179,6 +224,8 @@ class MainWindow(QMainWindow):
             # Save and Refresh
             self.annotation_manager.add_box(self.current_frame_idx, new_box)
             self.load_frame(self.current_frame_idx)  # Redraw UI
+            self.save_current_work()
+            
             # self.debug_draw_frustum(cam_id, [x, y, w, h])
             logger.info(
                 f"Created Box at {new_box.x:.2f}, {new_box.y:.2f}, {new_box.z:.2f}"

@@ -6,3 +6,6 @@ defaults:
 app:
   window_title: "SALT: Sensor Fusion Annotator"
   window_size: [1600, 900]
+
+output:
+  dir: "${hydra:runtime.cwd}/SALT_outputs_annotations"
