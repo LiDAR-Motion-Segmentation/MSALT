@@ -62,10 +62,23 @@ class LidarVisualizer(BasePluginWidget):
             colors[:, 0] = np.clip((z + 2) / 5, 0, 1)
             colors[:, 1] = 0.5
             
+            class_colors = {
+                "moving_people": [1.0, 0.0, 0.0, 1.0],  # Red
+                "static_people": [1.0, 1.0, 0.0, 1.0],  # Sky Blue
+                "static_car":    [0.0, 0.5, 1.0, 1.0],  # Yellow
+                "cyclist":       [1.0, 0.5, 0.0, 1.0],  # Orange
+                "noise":         [0.5, 0.0, 0.5, 1.0]   # Purple
+            }
+            default_color = [0.0, 1.0, 0.0, 1.0] # Green
+            
             for box in boxes:
                 if box.point_indices is not None:
                     # Color these points RED
-                    colors[box.point_indices] = [1.0, 0.0, 0.0, 1.0]
+                    lbl = box.label.strip() if box.label else "unknown"
+                    target_color = class_colors.get(lbl, default_color)
+                    
+                    # Apply to the specific indices
+                    colors[box.point_indices] = target_color
             
             # Update the scatter plot
             self.scatter.setData(pos=self.current_points, color=colors, size=2)
