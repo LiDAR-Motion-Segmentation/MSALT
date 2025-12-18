@@ -59,8 +59,17 @@ uv run main.py
 │       ├── interfaces.py
 │       ├── main_window.py
 │       ├── playback_widget.py
+├── test
+│   └── test_geometry.py
 └── uv.lock
 ```
 
 ## Working
 ![alt text](./assets/flowchart_v2.png)
+
+## Unit test
+- for runing the unit tests use
+```
+uv run ruff check . --fix
+uv run pytest 
+```
