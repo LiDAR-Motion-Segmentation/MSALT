@@ -1,4 +1,3 @@
-from turtle import width
 import pyqtgraph.opengl as gl
 import numpy as np
 from PyQt6.QtWidgets import QVBoxLayout
@@ -14,7 +13,7 @@ class LidarVisualizer(BasePluginWidget):
         self.current_boxes = []
         self.box_items = []
         self.debug_items = []
-        self.current_points = None 
+        self.current_points = None
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -43,8 +42,8 @@ class LidarVisualizer(BasePluginWidget):
             # Optimization: need to do this in C++ or use a pre-computed texture
             z = self.current_points[:, 2]
             colors = np.ones((self.current_points.shape[0], 4))
-            colors[:, 0] = np.clip((z + 2) / 5, 0, 1) # R
-            colors[:, 1] = 0.5                        # G
+            colors[:, 0] = np.clip((z + 2) / 5, 0, 1)  # R
+            colors[:, 1] = 0.5  # G
 
             self.scatter.setData(pos=self.current_points, color=colors, size=2)
 
@@ -61,28 +60,28 @@ class LidarVisualizer(BasePluginWidget):
             colors = np.ones((len(z), 4))
             colors[:, 0] = np.clip((z + 2) / 5, 0, 1)
             colors[:, 1] = 0.5
-            
+
             class_colors = {
                 "moving_people": [1.0, 0.0, 0.0, 1.0],  # Red
                 "static_people": [1.0, 1.0, 0.0, 1.0],  # Sky Blue
-                "static_car":    [0.0, 0.5, 1.0, 1.0],  # Yellow
-                "cyclist":       [1.0, 0.5, 0.0, 1.0],  # Orange
-                "noise":         [0.5, 0.0, 0.5, 1.0]   # Purple
+                "static_car": [0.0, 0.5, 1.0, 1.0],  # Yellow
+                "cyclist": [1.0, 0.5, 0.0, 1.0],  # Orange
+                "noise": [0.5, 0.0, 0.5, 1.0],  # Purple
             }
-            default_color = [0.0, 1.0, 0.0, 1.0] # Green
-            
+            default_color = [0.0, 1.0, 0.0, 1.0]  # Green
+
             for box in boxes:
                 if box.point_indices is not None:
                     # Color these points RED
                     lbl = box.label.strip() if box.label else "unknown"
                     target_color = class_colors.get(lbl, default_color)
-                    
+
                     # Apply to the specific indices
                     colors[box.point_indices] = target_color
-            
+
             # Update the scatter plot
             self.scatter.setData(pos=self.current_points, color=colors, size=2)
-        
+
         # Draw new boxes
         # Connectivity for a cube wireframe (lines between corner indices)
         # Corners are 0-7.
@@ -112,7 +111,7 @@ class LidarVisualizer(BasePluginWidget):
             for start, end in lines_indices:
                 pts.append(corners[start])
                 pts.append(corners[end])
-            
+
             pts = np.array(pts)
 
             # create line item
@@ -139,11 +138,11 @@ class LidarVisualizer(BasePluginWidget):
         # 2. Prepare Data
         pts = []
         for line in lines_list:
-            pts.append(line[0]) # Start (Camera Origin)
-            pts.append(line[1]) # End (Frustum corner)
-        
+            pts.append(line[0])  # Start (Camera Origin)
+            pts.append(line[1])  # End (Frustum corner)
+
         pts_arr = np.array(pts)
-        
+
         # 3. Debug Print (Check console!)
         print(f"DEBUG: Drawing {len(lines_list)} lines.")
         print(f"DEBUG: Start Point (Cam): {pts_arr[0]}")
@@ -152,10 +151,10 @@ class LidarVisualizer(BasePluginWidget):
         # 4. Draw
         line_item = gl.GLLinePlotItem(
             pos=pts_arr,
-            mode='lines',
-            color=(1, 0, 0, 1), # Bright Red
-            width=3,            # Thicker lines
-            antialias=True
+            mode="lines",
+            color=(1, 0, 0, 1),  # Bright Red
+            width=3,  # Thicker lines
+            antialias=True,
         )
         self.view_widget.addItem(line_item)
         self.debug_items.append(line_item)

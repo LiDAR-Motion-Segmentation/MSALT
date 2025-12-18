@@ -1,6 +1,5 @@
-from tkinter import Widget
 from typing import List
-from PyQt6.QtWidgets import QMainWindow, QDockWidget, QWidget, QVBoxLayout
+from PyQt6.QtWidgets import QMainWindow, QDockWidget
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence, QShortcut
 from pathlib import Path
@@ -34,10 +33,9 @@ class MainWindow(QMainWindow):
         self.annotation_manager = AnnotationManager()
         base_out = Path(self.data_controller.cfg.output.dir)
         self.annotation_manager.load_frames(
-            boxes_dir=base_out / "3d",
-            meta_dir=base_out / "metadata"
+            boxes_dir=base_out / "3d", meta_dir=base_out / "metadata"
         )
-        
+
         self.seg_engine = SegmentationEngine(self.data_controller.cfg.models)
 
         # State tracking
@@ -52,20 +50,22 @@ class MainWindow(QMainWindow):
 
         if self.data_controller.get_total_frames() > 0:
             self.load_frame(0)
-            
+
         self.automation_panel = AutomationPanel()
-        self.add_dock(self.automation_panel, "Automation", Qt.DockWidgetArea.LeftDockWidgetArea)
+        self.add_dock(
+            self.automation_panel, "Automation", Qt.DockWidgetArea.LeftDockWidgetArea
+        )
 
         # Connect the Button
         self.automation_panel.propagate_requested.connect(self.propagate_selection)
-        
+
         # Keep the 'P' Shortcut (Global)
         self.shortcut_p = QShortcut(QKeySequence("P"), self)
         self.shortcut_p.activated.connect(self.propagate_selection)
 
     def _init_ui(self):
         # assembling UI using dock widgets
-        
+
         # Camera Strip
         cam_ids = self.data_controller.get_camera_ids()
         self.cam_widget = CameraStripWidget(cam_ids)
@@ -85,21 +85,23 @@ class MainWindow(QMainWindow):
         dock_timeline.setWidget(self.playback)
         dock_timeline.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock_timeline)
-        
+
         # Shortcut for saving
         save_action = QAction("Save Annotations", self)
         save_action.setShortcut(QKeySequence("Ctrl+S"))
         save_action.triggered.connect(self.save_current_work)
         self.addAction(save_action)
-        
+
         # Annotation List Dock
         self.list_panel = AnnotationListWidget()
-        self.add_dock(self.list_panel, "Annotations", Qt.DockWidgetArea.RightDockWidgetArea)
-        
+        self.add_dock(
+            self.list_panel, "Annotations", Qt.DockWidgetArea.RightDockWidgetArea
+        )
+
         # Connect Signals
         self.list_panel.box_selected.connect(self.on_box_selected)
         self.list_panel.box_deleted.connect(self.on_box_deleted)
-        
+
         # Right Arrow -> Next Frame
         self.shortcut_next = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
         self.shortcut_next.activated.connect(self.next_frame)
@@ -107,41 +109,33 @@ class MainWindow(QMainWindow):
         # Left Arrow -> Previous Frame
         self.shortcut_prev = QShortcut(QKeySequence(Qt.Key.Key_Left), self)
         self.shortcut_prev.activated.connect(self.prev_frame)
-        
+
         # Spacebar -> Play/Pause
         self.shortcut_play = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
         self.shortcut_play.activated.connect(self.toggle_play)
-        
+
         # Inspector dock
         self.inspector = InspectorWidget()
-        self.add_dock(self.inspector, "Inspector", Qt.DockWidgetArea.RightDockWidgetArea)
-        
+        self.add_dock(
+            self.inspector, "Inspector", Qt.DockWidgetArea.RightDockWidgetArea
+        )
+
         # Connect: When Inspector changes a value, refresh the 3D view
         self.inspector.box_changed.connect(self.on_box_edited)
-        
+
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
-    
+
         base_out = Path(self.data_controller.cfg.output.dir)
         boxes_dir = base_out / "3d"
         meta_dir = base_out / "metadata"
-        
-        if hasattr(self.data_controller, 'pcd_files'):
-            try:
-                pcd_path = self.data_controller.pcd_files[self.current_frame_idx]
-                current_frame_name = pcd_path.stem
-            except IndexError:
-                pass
-            
+
         filename = f"{self.current_frame_idx:06d}.json"
-        
+
         self.annotation_manager.save_frame(
-            self.current_frame_idx, 
-            boxes_dir,
-            meta_dir, 
-            filename
+            self.current_frame_idx, boxes_dir, meta_dir, filename
         )
-        
+
         self.statusBar().showMessage(f"Saved: {filename}", 3000)
         logger.info(f"Exported annotation to: {filename}")
 
@@ -161,51 +155,49 @@ class MainWindow(QMainWindow):
         self.current_frame_data = self.data_controller.get_frame(idx)
         boxes = self.annotation_manager.get_boxes(idx)
         boxes_2d_map = defaultdict(list)
-        
+
         # prepare 2D Box Map for Camera View
         for box in boxes:
             if box.source_2d:
-                cam_id = box.source_2d['cam_id']
-                rect = box.source_2d['rect']
-                boxes_2d_map[cam_id].append({
-                    'rect': rect,
-                    'id': box.track_id,
-                    'label': box.label
-                })
-                
+                cam_id = box.source_2d["cam_id"]
+                rect = box.source_2d["rect"]
+                boxes_2d_map[cam_id].append(
+                    {"rect": rect, "id": box.track_id, "label": box.label}
+                )
+
         # update for plugins
         for plugin in self.plugins:
             plugin.on_frame_update(self.current_frame_data)
-        
-        self.cam_widget.update_2d_boxes(boxes_2d_map)    
+
+        self.cam_widget.update_2d_boxes(boxes_2d_map)
         self.lidar_widget.on_frame_update(self.current_frame_data)
         self.lidar_widget.update_boxes(boxes)
         self.list_panel.update_list(boxes)
-        
+
     def on_box_selected(self, box):
         # Highlight the box in 3D view when clicked in list.
         # Deselect all
         current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
         for b in current_boxes:
-            b.selected = (b == box)
+            b.selected = b == box
         # Redraw
         self.lidar_widget.update_boxes(current_boxes)
-        
+
         # update inspector panel
         self.inspector.set_box(box)
-        
+
     def on_box_edited(self, box):
         current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
         self.lidar_widget.update_boxes(current_boxes)
         self.list_panel.update_list(current_boxes)
         self.save_current_work()
-        
+
     def on_box_deleted(self, box):
         # Remove box from manager and refresh.
         self.annotation_manager.delete_box(self.current_frame_idx, box)
-        self.load_frame(self.current_frame_idx) # Refresh view
-        
-        # Auto-save after delete 
+        self.load_frame(self.current_frame_idx)  # Refresh view
+
+        # Auto-save after delete
         self.save_current_work()
 
     def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int):
@@ -223,7 +215,7 @@ class MainWindow(QMainWindow):
             return
 
         K = calib["intrinsic"]
-        
+
         # This is Cam->World pose
         camera_pos = calib["extrinsic"]
 
@@ -238,7 +230,7 @@ class MainWindow(QMainWindow):
             return
 
         logger.info(f"Running SAM2 on {cam_id}...")
-        
+
         # Generate Mask (AI Step)
         mask = self.seg_engine.get_mask_from_box(image, [x, y, w, h])
 
@@ -261,22 +253,22 @@ class MainWindow(QMainWindow):
 
             # Save indices for Red Coloring
             new_box.point_indices = np.where(mask_3d)[0]
-            
+
             # Save 2D Rect for Cyan Box
-            new_box.source_2d = {'cam_id': cam_id, 'rect': [x, y, w, h]}
-            
+            new_box.source_2d = {"cam_id": cam_id, "rect": [x, y, w, h]}
+
             # Save and Refresh
             self.annotation_manager.add_box(self.current_frame_idx, new_box)
             self.load_frame(self.current_frame_idx)  # Redraw UI
             self.save_current_work()
-            
+
             # self.debug_draw_frustum(cam_id, [x, y, w, h])
             logger.info(
                 f"Created Box at {new_box.x:.2f}, {new_box.y:.2f}, {new_box.z:.2f}"
             )
         else:
             logger.warning("No 3D points found inside the mask.")
-            
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
         # right arrow -> Next Frame
         if event.key() == Qt.Key.Key_Right:
@@ -285,16 +277,16 @@ class MainWindow(QMainWindow):
                 self.load_frame(self.current_frame_idx + 1)
                 # Update slider position visually
                 self.playback.slider.setValue(self.current_frame_idx)
-                
+
         # left arrow -> Previous Frame
         elif event.key() == Qt.Key.Key_Left:
             if self.current_frame_idx > 0:
                 self.load_frame(self.current_frame_idx - 1)
                 self.playback.slider.setValue(self.current_frame_idx)
-        
+
         else:
             super().keyPressEvent(event)
-            
+
     def next_frame(self):
         total = self.data_controller.get_total_frames()
         if self.current_frame_idx < total - 1:
@@ -309,10 +301,10 @@ class MainWindow(QMainWindow):
             self.load_frame(new_idx)
             # Sync the slider
             self.playback.slider.setValue(new_idx)
-            
+
     def toggle_play(self):
         # Assuming PlaybackWidget has a toggle method, or you simulate the button click
-        if hasattr(self.playback, 'play_btn'):
+        if hasattr(self.playback, "play_btn"):
             self.playback.play_btn.click()
 
     def propagate_selection(self):
@@ -320,11 +312,11 @@ class MainWindow(QMainWindow):
         # Find what is selected
         current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
         selected_boxes = [b for b in current_boxes if b.selected]
-        
+
         if not selected_boxes:
             self.statusBar().showMessage("Please select a box to propagate.", 2000)
             return
-            
+
         # Run the copy logic
         self._perform_propagation(selected_boxes)
 
@@ -332,56 +324,64 @@ class MainWindow(QMainWindow):
         """Copies the list of boxes to the next frame."""
         next_idx = self.current_frame_idx + 1
         total_frames = self.data_controller.get_total_frames()
-        
+
         if next_idx >= total_frames:
             self.statusBar().showMessage("Already at the last frame!", 2000)
             return
 
         # Get Data for Next Frame (To calculate new points/2D box)
         next_data = self.data_controller.get_frame(next_idx)
-        
+
         count = 0
         for old_box in boxes_to_copy:
-            
+
             # Clone the Box (Deep Copy)
             new_box = BoundingBox3D(
                 track_id=old_box.track_id,  # Keep ID same
-                label=old_box.label,        # Keep Label same
-                x=old_box.x, y=old_box.y, z=old_box.z,
-                dx=old_box.dx, dy=old_box.dy, dz=old_box.dz,
-                heading=old_box.heading
+                label=old_box.label,  # Keep Label same
+                x=old_box.x,
+                y=old_box.y,
+                z=old_box.z,
+                dx=old_box.dx,
+                dy=old_box.dy,
+                dz=old_box.dz,
+                heading=old_box.heading,
             )
-            
+
             # Recalculate 3D Points (Red/Blue Coloring)
             if next_data.point_cloud is not None:
-                indices = GeometryUtils.get_points_in_box(next_data.point_cloud, new_box)
+                indices = GeometryUtils.get_points_in_box(
+                    next_data.point_cloud, new_box
+                )
                 new_box.point_indices = indices
 
             # Recalculate 2D Box (Cyan Visual)
             # We try to use the same camera ID as the previous frame
             if old_box.source_2d and next_data.images:
-                cam_id = old_box.source_2d.get('cam_id')
-                
+                cam_id = old_box.source_2d.get("cam_id")
+
                 # Check if this camera exists in the next frame
-                if cam_id in next_data.images and cam_id in next_data.metadata['calibration']:
-                    calib = next_data.metadata['calibration'][cam_id]
+                if (
+                    cam_id in next_data.images
+                    and cam_id in next_data.metadata["calibration"]
+                ):
+                    calib = next_data.metadata["calibration"][cam_id]
                     img_shape = next_data.images[cam_id].shape
-                    
+
                     # Math Magic
                     res = GeometryUtils.project_box_to_image(
-                        new_box, 
-                        calib['extrinsic'], 
-                        calib['intrinsic'], 
-                        img_shape
+                        new_box, calib["extrinsic"], calib["intrinsic"], img_shape
                     )
-                    
+
                     if res:
-                        new_box.source_2d = {'cam_id': cam_id, 'rect': res['rect']}
+                        new_box.source_2d = {"cam_id": cam_id, "rect": res["rect"]}
 
             # Save to Manager
             self.annotation_manager.add_box(next_idx, new_box)
             count += 1
-            
+
         # Jump to the next frame so user can see the result
         self.load_frame(next_idx)
-        self.statusBar().showMessage(f"Propagated {count} objects to Frame {next_idx}", 2000)
+        self.statusBar().showMessage(
+            f"Propagated {count} objects to Frame {next_idx}", 2000
+        )

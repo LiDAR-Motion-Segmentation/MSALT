@@ -8,7 +8,7 @@ A production-grade PyQt6 application for labeling synchronized LiDAR point cloud
 
 - Multi-view camera support (flexible config)
 - 3D Cuboid annotation in LiDAR space
-- YOLO + SAM 2 auto-annotation integration
+- SAM 2 auto-annotation integration
 - Automatic Lidar-Camera projection
 
 to run use

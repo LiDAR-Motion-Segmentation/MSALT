@@ -1,0 +1,45 @@
+# .github/workflows/ci.yml
+name: SALT CI Pipeline
+
+# Trigger on Push to Main or Pull Requests
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # 1. Check out the code
+    - uses: actions/checkout@v4
+
+    # 2. Install "uv" (The fast python package manager)
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
+    # 3. Install Python
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    # 4. Install Dependencies
+    # We use --system or sync to install packages
+    - name: Install dependencies
+      run: |
+        uv sync --all-extras --dev
+
+    # 5. Linting (Check for messy code)
+    - name: Run Ruff (Linting)
+      run: uv run ruff check src/
+
+    # 6. Run Tests
+    - name: Run Tests
+      uses: GabrielBB/xvfb-action@v1 # Simulates a display
+      with:
+        run: uv run pytest tests/

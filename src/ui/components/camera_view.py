@@ -1,4 +1,4 @@
-from typing import Container, List, Dict
+from typing import List, Dict
 import numpy as np
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QVBoxLayout, QScrollArea
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -85,7 +85,7 @@ class CameraStripWidget(BasePluginWidget):
         # Clear all first
         for lbl in self.image_labels.values():
             lbl.set_static_rects([])
-            
+
         # Set new ones
         for cam_id, rects in boxes_map.items():
             if cam_id in self.image_labels:

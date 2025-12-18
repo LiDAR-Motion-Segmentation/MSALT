@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from PyQt6.QtWidgets import QWidget
 from typing import Optional
 from src.data.structures import FrameData
