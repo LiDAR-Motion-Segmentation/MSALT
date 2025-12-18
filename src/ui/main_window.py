@@ -31,11 +31,13 @@ class MainWindow(QMainWindow):
         self.resize(1920, 1080)
         self.data_controller = data_controller
         self.annotation_manager = AnnotationManager()
+        base_out = Path(self.data_controller.cfg.output.dir)
+        self.annotation_manager.load_frames(
+            boxes_dir=base_out / "3d",
+            meta_dir=base_out / "metadata"
+        )
+        
         self.seg_engine = SegmentationEngine(self.data_controller.cfg.models)
-
-        # trying dummy data
-        # dummy_box = BoundingBox3D(x=0, y=0, z=-1, dx=4, dy=2, dz=1.5, heading=0.5)
-        # self.annotation_manager.add_box(0, dummy_box)
 
         # State tracking
         self.current_frame_idx = 0
@@ -107,10 +109,11 @@ class MainWindow(QMainWindow):
         self.inspector.box_changed.connect(self.on_box_edited)
         
     def save_current_work(self):
-        """Saves the JSON for the current frame."""
+        """Saves both 3D JSON and Metadata JSON using 000000.json format."""
     
-        output_dir = Path(self.data_controller.cfg.output.dir)
-        current_frame_name = f"frame_{self.current_frame_idx:06d}"
+        base_out = Path(self.data_controller.cfg.output.dir)
+        boxes_dir = base_out / "3d"
+        meta_dir = base_out / "metadata"
         
         if hasattr(self.data_controller, 'pcd_files'):
             try:
@@ -121,14 +124,15 @@ class MainWindow(QMainWindow):
             
         filename = f"{self.current_frame_idx:06d}.json"
         
-        self.annotation_manager.save_frame_json(
+        self.annotation_manager.save_frame(
             self.current_frame_idx, 
-            output_dir, 
+            boxes_dir,
+            meta_dir, 
             filename
         )
         
         self.statusBar().showMessage(f"Saved: {filename}", 3000)
-        logger.info(f"Exported annotation to: {output_dir / filename}")
+        logger.info(f"Exported annotation to: {filename}")
 
     def add_dock(self, widget: BasePluginWidget, title: str, area: Qt.DockWidgetArea):
         dock = QDockWidget(title, self)
