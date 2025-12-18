@@ -63,4 +63,4 @@ uv run main.py
 ```
 
 ## Working
-![alt text](./assets/flowchart_v1.png)
+![alt text](./assets/flowchart_v2.png)
