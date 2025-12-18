@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QLabel
 from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPoint
-from PyQt6.QtGui import QPainter, QPen, QColor, QMouseEvent
+from PyQt6.QtGui import QPainter, QPen, QColor, QMouseEvent, QFont, QFontMetrics
 
 
 class DrawableLabel(QLabel):
@@ -32,8 +32,11 @@ class DrawableLabel(QLabel):
         self.orig_width = w
         self.orig_height = h
         
-    def set_static_rects(self, rects_list):
-        self.static_rects = rects_list
+    def set_static_rects(self, rects_data):
+        """
+        Receives list of dicts: [{'rect': [x,y,w,h], 'id': 1, 'label': 'person'}, ...]
+        """
+        self.static_rects = rects_data
         self.update()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
@@ -88,6 +91,11 @@ class DrawableLabel(QLabel):
         # draw the image
         super().paintEvent(event)
         painter = QPainter(self)
+        
+        # Setup Font
+        font = QFont("Arial", 10, QFont.Weight.Bold)
+        painter.setFont(font)
+        fm = QFontMetrics(font)
 
         # Calculate Scale
         scale_x = self.width() / self.orig_width
@@ -98,13 +106,44 @@ class DrawableLabel(QLabel):
         painter.setPen(pen_static)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         
-        for (rx, ry, rw, rh) in self.static_rects:
+        for item in self.static_rects:
+            # Handle both legacy (list) and new (dict) formats
+            if isinstance(item, list):
+                # Fallback for old code if needed
+                rx, ry, rw, rh = item
+                label_text = ""
+            else:
+                rx, ry, rw, rh = item['rect']
+                obj_id = item.get('id', '?')
+                obj_lbl = item.get('label', 'unknown')
+                label_text = f"{obj_id}: {obj_lbl}"
+                
             # Scale back to screen coords
             sx = int(rx * scale_x)
             sy = int(ry * scale_y)
             sw = int(rw * scale_x)
             sh = int(rh * scale_y)
+            
+            # Draw Box
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(0, 255, 255), 2))
             painter.drawRect(sx, sy, sw, sh)
+            
+            # Draw text overlay
+            if label_text:
+                text_w = fm.horizontalAdvance(label_text) + 10
+                text_h = fm.height() + 4
+                
+                # Draw tiny background for text (so it's readable)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(0, 0, 0, 150)) # Semi-transparent black
+                # Position text above the box (or inside if at top edge)
+                text_y = sy - text_h if sy - text_h > 0 else sy
+                painter.drawRect(sx, text_y, text_w, text_h)
+                
+                # Draw Text
+                painter.setPen(QColor(255, 255, 255)) # White text
+                painter.drawText(sx + 5, text_y + fm.ascent() + 2, label_text)   
 
         # Draw ACTIVE Rubberband (The one you are dragging) - Green
         if self.current_rect and self.is_drawing:

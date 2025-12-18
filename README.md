@@ -20,7 +20,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 uv run main.py
 ```
-![alt text](./assets/ui_v4.png)
+![alt text](./assets/ui_v5.png)
 
 ## Directory Structure
 ```
@@ -53,6 +53,7 @@ uv run main.py
 |       |   ├── annotation_list.py
 │       │   ├── camera_view.py
 │       │   ├── drawable_label.py
+|       |   ├── inspector_view.py
 │       │   ├── lidar_view.py
 │       ├── interfaces.py
 │       ├── main_window.py

@@ -156,7 +156,11 @@ class MainWindow(QMainWindow):
             if box.source_2d:
                 cam_id = box.source_2d['cam_id']
                 rect = box.source_2d['rect']
-                boxes_2d_map[cam_id].append(rect)
+                boxes_2d_map[cam_id].append({
+                    'rect': rect,
+                    'id': box.track_id,
+                    'label': box.label
+                })
                 
         # update for plugins
         for plugin in self.plugins:
