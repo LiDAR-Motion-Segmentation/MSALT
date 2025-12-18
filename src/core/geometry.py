@@ -1,6 +1,7 @@
 import numpy as np
 import open3d as o3d
 from sklearn.cluster import DBSCAN
+from scipy.spatial.transform import Rotation as R
 
 class GeometryUtils:
     @staticmethod
@@ -237,3 +238,62 @@ class GeometryUtils:
         mask_3d[final_candidates_mask] = is_in_mask
         
         return mask_3d
+
+    @staticmethod
+    def get_points_in_box(points: np.ndarray, box) -> np.ndarray:
+        """
+        Finds which LiDAR points are strictly inside a 3D Box.
+        Used to 're-color' points (Red/Blue) after propagating.
+        """
+        if points is None or len(points) == 0:
+            return np.array([], dtype=int)
+
+        # Translate points to Box Frame
+        center = np.array([box.x, box.y, box.z])
+        pts_local = points - center
+        
+        # Rotate points to align with Box Axes
+        rot_mat = R.from_euler('z', -box.heading).as_matrix()
+        pts_aligned = pts_local @ rot_mat.T 
+        
+        # Check Bounds (Is point inside the box dimensions?)
+        half_dx, half_dy, half_dz = box.dx / 2.0, box.dy / 2.0, box.dz / 2.0
+        
+        mask = (np.abs(pts_aligned[:, 0]) <= half_dx) & \
+               (np.abs(pts_aligned[:, 1]) <= half_dy) & \
+               (np.abs(pts_aligned[:, 2]) <= half_dz)
+        
+        return np.where(mask)[0]
+
+    @staticmethod
+    def project_box_to_image(box, camera_pose: np.ndarray, intr: np.ndarray, image_shape) -> dict:
+        """
+        Projects a 3D Box onto the camera image to find the new 2D Bounding Box (Cyan Box).
+        """
+        # Get 8 Corners of the 3D Box
+        corners_3d = box.get_corners() 
+        
+        # Project 3D Corners -> 2D Pixels
+        uv, valid = GeometryUtils.project_lidar_to_image(corners_3d, camera_pose, intr)
+        
+        # If fewer than 4 corners are visible, the object is likely off-screen
+        if np.sum(valid) < 4: 
+            return None
+            
+        uv_valid = uv[valid]
+        
+        # Find the Rectangle that covers these pixels
+        min_x, max_x = np.min(uv_valid[:, 0]), np.max(uv_valid[:, 0])
+        min_y, max_y = np.min(uv_valid[:, 1]), np.max(uv_valid[:, 1])
+        
+        # Clip to Image Dimensions
+        h, w = image_shape[:2]
+        x = int(max(0, min_x))
+        y = int(max(0, min_y))
+        w_rect = int(min(w, max_x) - x)
+        h_rect = int(min(h, max_y) - y)
+        
+        if w_rect <= 0 or h_rect <= 0:
+            return None
+            
+        return {'rect': [x, y, w_rect, h_rect]}

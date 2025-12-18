@@ -35,7 +35,18 @@ class AnnotationListWidget(QWidget):
         layout.addWidget(self.list_widget)
         
         # Delete Button
-        btn_del = QPushButton("Delete Selected (Del)")
+        btn_del = QPushButton("Delete Selected")
+        btn_del.setStyleSheet("""
+            QPushButton {
+                background-color: #c0392b; 
+                color: white; 
+                font-weight: bold;
+                padding: 6px;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #e74c3c; }
+            QPushButton:pressed { background-color: #a93226; }
+        """)
         btn_del.clicked.connect(self.delete_selected)
         layout.addWidget(btn_del)
         

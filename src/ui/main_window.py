@@ -12,6 +12,7 @@ from src.ui.components.lidar_view import LidarVisualizer
 from src.ui.playback_widget import PlaybackWidget
 from src.ui.components.annotation_list import AnnotationListWidget
 from src.ui.components.inspector_view import InspectorWidget
+from src.ui.components.automation_panel import AutomationPanel
 
 from src.core.annotation_manager import AnnotationManager
 from src.core.objects import BoundingBox3D
@@ -51,6 +52,16 @@ class MainWindow(QMainWindow):
 
         if self.data_controller.get_total_frames() > 0:
             self.load_frame(0)
+            
+        self.automation_panel = AutomationPanel()
+        self.add_dock(self.automation_panel, "Automation", Qt.DockWidgetArea.LeftDockWidgetArea)
+
+        # Connect the Button
+        self.automation_panel.propagate_requested.connect(self.propagate_selection)
+        
+        # Keep the 'P' Shortcut (Global)
+        self.shortcut_p = QShortcut(QKeySequence("P"), self)
+        self.shortcut_p.activated.connect(self.propagate_selection)
 
     def _init_ui(self):
         # assembling UI using dock widgets
@@ -303,3 +314,74 @@ class MainWindow(QMainWindow):
         # Assuming PlaybackWidget has a toggle method, or you simulate the button click
         if hasattr(self.playback, 'play_btn'):
             self.playback.play_btn.click()
+
+    def propagate_selection(self):
+        """Entry point: User pressed P or clicked button."""
+        # Find what is selected
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        selected_boxes = [b for b in current_boxes if b.selected]
+        
+        if not selected_boxes:
+            self.statusBar().showMessage("Please select a box to propagate.", 2000)
+            return
+            
+        # Run the copy logic
+        self._perform_propagation(selected_boxes)
+
+    def _perform_propagation(self, boxes_to_copy):
+        """Copies the list of boxes to the next frame."""
+        next_idx = self.current_frame_idx + 1
+        total_frames = self.data_controller.get_total_frames()
+        
+        if next_idx >= total_frames:
+            self.statusBar().showMessage("Already at the last frame!", 2000)
+            return
+
+        # Get Data for Next Frame (To calculate new points/2D box)
+        next_data = self.data_controller.get_frame(next_idx)
+        
+        count = 0
+        for old_box in boxes_to_copy:
+            
+            # Clone the Box (Deep Copy)
+            new_box = BoundingBox3D(
+                track_id=old_box.track_id,  # Keep ID same
+                label=old_box.label,        # Keep Label same
+                x=old_box.x, y=old_box.y, z=old_box.z,
+                dx=old_box.dx, dy=old_box.dy, dz=old_box.dz,
+                heading=old_box.heading
+            )
+            
+            # Recalculate 3D Points (Red/Blue Coloring)
+            if next_data.point_cloud is not None:
+                indices = GeometryUtils.get_points_in_box(next_data.point_cloud, new_box)
+                new_box.point_indices = indices
+
+            # Recalculate 2D Box (Cyan Visual)
+            # We try to use the same camera ID as the previous frame
+            if old_box.source_2d and next_data.images:
+                cam_id = old_box.source_2d.get('cam_id')
+                
+                # Check if this camera exists in the next frame
+                if cam_id in next_data.images and cam_id in next_data.metadata['calibration']:
+                    calib = next_data.metadata['calibration'][cam_id]
+                    img_shape = next_data.images[cam_id].shape
+                    
+                    # Math Magic
+                    res = GeometryUtils.project_box_to_image(
+                        new_box, 
+                        calib['extrinsic'], 
+                        calib['intrinsic'], 
+                        img_shape
+                    )
+                    
+                    if res:
+                        new_box.source_2d = {'cam_id': cam_id, 'rect': res['rect']}
+
+            # Save to Manager
+            self.annotation_manager.add_box(next_idx, new_box)
+            count += 1
+            
+        # Jump to the next frame so user can see the result
+        self.load_frame(next_idx)
+        self.statusBar().showMessage(f"Propagated {count} objects to Frame {next_idx}", 2000)
