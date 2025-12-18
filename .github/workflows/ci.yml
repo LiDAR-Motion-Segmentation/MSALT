@@ -42,4 +42,4 @@ jobs:
     - name: Run Tests
       uses: GabrielBB/xvfb-action@v1 # Simulates a display
       with:
-        run: uv run pytest tests/
+        run: uv run pytest test/
