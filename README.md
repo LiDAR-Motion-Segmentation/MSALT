@@ -65,7 +65,7 @@ uv run main.py
 ```
 
 ## Working
-![alt text](./assets/flowchart_v2.png)
+![alt text](./assets/flowchart_v3.png)
 
 ## Unit test
 - for runing the unit tests use
