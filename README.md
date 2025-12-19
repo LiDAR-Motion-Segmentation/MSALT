@@ -60,6 +60,9 @@ uv run main.py
     └── ...
 ```
 
+## Architecture
+![alt text](./assets/flowchart_v3.png)
+
 ## Directory Structure
 - SALT follows a modular `Model-View-Controller (MVC)` pattern to separate UI logic from geometric processing.
 ```
@@ -103,12 +106,10 @@ uv run main.py
 └── uv.lock
 ```
 
-## Architecture
-![alt text](./assets/flowchart_v3.png)
 
 ## Testing
 - We use `pytest` for logic verification and `ruff` for linting
-```
+```bash
 # Check code style
 uv run ruff check . --fix
 
