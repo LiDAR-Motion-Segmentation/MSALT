@@ -232,7 +232,15 @@ class MainWindow(QMainWindow):
         logger.info(f"Running SAM2 on {cam_id}...")
 
         # Generate Mask (AI Step)
-        mask = self.seg_engine.get_mask_from_box(image, [x, y, w, h])
+        try:
+            mask = self.seg_engine.get_mask_from_box(image, [x, y, w, h])
+        except Exception as e:
+            logger.error(f"SAM 2 Error: {e}")
+            mask = None
+            
+        if mask is None:
+            self.statusBar().showMessage("SAM 2 could not find an object there.", 2000)
+            return
 
         # Filter Points (Frustum Culling)
         points = self.current_frame_data.point_cloud
