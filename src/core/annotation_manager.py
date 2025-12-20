@@ -84,8 +84,8 @@ class AnnotationManager:
             logger.info(f"Saved annotations to {filename}")
 
     def load_frames(self, boxes_dir: Path, meta_dir: Path):
-        boxes_dir = Path(boxes_dir)
-        meta_dir = Path(meta_dir)
+        self.boxes_dir = Path(boxes_dir)
+        self.meta_dir = Path(meta_dir)
 
         if not boxes_dir.exists():
             return
@@ -149,3 +149,22 @@ class AnnotationManager:
                 count += len(loaded_boxes)
 
         logger.info(f"Loaded {count} boxes from {boxes_dir}")
+
+    def remove_box(self, frame_idx: int, track_id: int):
+        if frame_idx not in self.annotations:
+            return
+
+        # Filter out the box with the matching ID
+        initial_count = len(self.annotations[frame_idx])
+        self.annotations[frame_idx] = [
+            box for box in self.annotations[frame_idx] 
+            if box.track_id != track_id
+        ]
+
+        # Only trigger save if something was actually removed
+        if len(self.annotations[frame_idx]) < initial_count:
+            if self.boxes_dir and self.meta_dir:            
+                filename = f"{frame_idx:06d}.json"
+                self.save_frame(frame_idx, self.boxes_dir, self.meta_dir, filename)
+            else:
+                logger.warning("Cannot save deletion: Output directories not set.")

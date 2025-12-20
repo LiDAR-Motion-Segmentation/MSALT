@@ -114,6 +114,11 @@ class MainWindow(QMainWindow):
         self.shortcut_play = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
         self.shortcut_play.activated.connect(self.toggle_play)
 
+        # Delete box
+        self.shortcut_del = QShortcut(QKeySequence(Qt.Key.Key_Delete), self)
+        self.shortcut_del.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.shortcut_del.activated.connect(self.delete_selection)
+        
         # Inspector dock
         self.inspector = InspectorWidget()
         self.add_dock(
@@ -122,7 +127,7 @@ class MainWindow(QMainWindow):
 
         # Connect: When Inspector changes a value, refresh the 3D view
         self.inspector.box_changed.connect(self.on_box_edited)
-
+        
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
 
@@ -393,3 +398,19 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"Propagated {count} objects to Frame {next_idx}", 2000
         )
+
+    def delete_selection(self):
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        to_delete = [b for b in current_boxes if b.selected]
+        
+        if not to_delete:
+            self.statusBar().showMessage("No box selected to delete.", 2000)
+            return
+        
+        # Perform Delete
+        for box in to_delete:
+            self.annotation_manager.remove_box(self.current_frame_idx, box.track_id)
+            
+        # Refresh View
+        self.load_frame(self.current_frame_idx)
+        self.statusBar().showMessage(f"Deleted {len(to_delete)} objects.", 2000)
