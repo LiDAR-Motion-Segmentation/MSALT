@@ -46,6 +46,8 @@ uv run main.py
 | **3D View** | `Left Drag` / `Right Drag` | Rotate / Pan Camera |
 | **3D View** | `Scroll` | Zoom In / Out |
 
+![alt text](./assets/UI_action.gif)
+
 ## Data structure
 - SALT expects your data to be organized as follows. Define the paths in `config/config.yaml`
 ```
