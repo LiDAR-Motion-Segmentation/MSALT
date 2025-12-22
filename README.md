@@ -46,10 +46,10 @@ uv run main.py
 | **3D View** | `Left Drag` / `Right Drag` | Rotate / Pan Camera |
 | **3D View** | `Scroll` | Zoom In / Out |
 
-<!-- ![alt text](./assets/annotation_video_box_editing.mp4) -->
+![alt text](./assets/UI_action.gif)
 
-<video src="./assets/annotation_video_box_editing.mp4" controls title="A short video demonstration" width="600">
-</video>
+<!-- <video src="./assets/annotation_video_box_editing.mp4" controls title="A short video demonstration" width="600">
+</video> -->
 
 
 ## Data structure
