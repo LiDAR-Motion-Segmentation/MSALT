@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QGroupBox, QLabel
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel
 from PyQt6.QtCore import pyqtSignal, Qt
 
 
@@ -18,10 +18,6 @@ class AutomationPanel(QWidget):
         title = QLabel("<b>Automation Tools</b>")
         title.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 5px;")
         layout.addWidget(title)
-
-        # Group: Sequential Tracking
-        grp_seq = QGroupBox("Sequential Tracking")
-        vbox_seq = QVBoxLayout(grp_seq)
 
         # Propagate Button
         self.btn_propagate = QPushButton("Propagate Selection (P) ")
