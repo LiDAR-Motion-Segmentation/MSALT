@@ -1,10 +1,10 @@
 from typing import Dict, List
-
 from src.core.objects import BoundingBox3D
 import json
 import logging
 from pathlib import Path
 import numpy as np
+from src.core.geometry import GeometryUtils
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +13,10 @@ class AnnotationManager:
     def __init__(self) -> None:
         # Master storage: Frame Index -> List of Boxes
         self.annotations: Dict[int, List[BoundingBox3D]] = {}
+        
+        # Store paths for saving later
+        self.boxes_dir = None
+        self.meta_dir = None
 
     def get_boxes(self, frame_idx: int):
         return self.annotations.get(frame_idx, [])
@@ -165,6 +169,60 @@ class AnnotationManager:
         if len(self.annotations[frame_idx]) < initial_count:
             if self.boxes_dir and self.meta_dir:            
                 filename = f"{frame_idx:06d}.json"
-                self.save_frame(frame_idx, self.boxes_dir, self.meta_dir, filename)
+                self.save_frame(frame_idx, self.boxes_dir, self.meta_dir, filename=filename)
             else:
                 logger.warning("Cannot save deletion: Output directories not set.")
+                
+    def run_interpolation(self, track_id: int, current_frame_idx: int):
+        """
+        Finds the previous appearance of track_id and fills frames up to current_frame_idx.
+        """
+        # searching backwards
+        start_frame = -1
+        box_start = None
+        
+        # look back upto 50 frames -> need to check 10
+        for f in range(current_frame_idx - 1, max(-1, current_frame_idx - 50),-1):
+            frames_boxes = self.get_boxes(f)
+            match = next((b for b in frames_boxes if b.track_id == track_id), None)
+            if match:
+                start_frame = f
+                box_start = match
+                break
+            
+        if box_start is None:
+            logger.warning(f"No previous frame found for Track ID {track_id}")
+            return 0
+        
+        # Get "End" Keyframe (Current Frame)
+        current_boxes = self.get_boxes(current_frame_idx)
+        box_end = next((b for b in current_boxes if b.track_id == track_id), None)
+        
+        if not box_end:
+            return 0
+        
+        total_steps = current_frame_idx - start_frame
+        count = 0
+        
+        for i in range(1, total_steps):
+            t = i / total_steps
+            target_frame = start_frame + i
+            
+            # calculating params
+            params = GeometryUtils.interpolate_box(box_start, box_end, t)
+        
+            # create object
+            new_box = BoundingBox3D(**params)
+            
+            # Overwrite existing box if present
+            self.remove_box(target_frame, track_id)
+            self.add_box(target_frame, new_box)
+            
+            # Auto-save
+            if self.boxes_dir and self.meta_dir:
+                filename = f"{target_frame:06d}.json"
+                self.save_frame(target_frame, self.boxes_dir, self.meta_dir, filename)
+            
+            count += 1
+            
+        return count

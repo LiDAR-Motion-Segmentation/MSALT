@@ -308,3 +308,37 @@ class GeometryUtils:
             return None
 
         return {"rect": [x, y, w_rect, h_rect]}
+
+    @staticmethod
+    def interpolate_box(box_start, box_end, t: float):
+        """
+        Interpolates between two BoundingBox3D objects.
+        t: 0.0 (start) to 1.0 (end)
+        """
+        
+        # linear interpolation for position & dimensions
+        x = box_start.x + (box_end.x - box_start.x) * t
+        y = box_start.y + (box_end.y - box_start.y) * t
+        z = box_start.z + (box_end.z - box_start.z) * t
+        
+        dx = box_start.dx + (box_end.dx - box_start.dx) * t
+        dy = box_start.dy + (box_end.dy - box_start.dy) * t
+        dz = box_start.dz + (box_end.dz - box_start.dz) * t
+        
+        rot_diff = box_end.heading - box_start.heading
+        
+        # Normalize diff to [-pi, pi]
+        rot_diff = (rot_diff + np.pi) % (2 * np.pi) - np.pi
+        heading = box_start.heading + rot_diff * t
+        
+        return {
+            'x': x, 
+            'y': y, 
+            'z': z,
+            'dx': dx, 
+            'dy': dy, 
+            'dz': dz,
+            'heading': heading,
+            'label': box_start.label,    
+            'track_id': box_start.track_id
+        }

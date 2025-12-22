@@ -27,7 +27,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 uv run main.py
 ```
-![alt text](./assets/ui_v7.png)
+![alt text](./assets/ui_v8.png)
 
 ## Model weights
 - Download the SAM 2 checkpoints and place them in the checkpoints/ directory (create if missing).
@@ -40,6 +40,7 @@ uv run main.py
 | **Selection** | `Left Click` (3D View) | Select a Bounding Box |
 | **Editing** | `Mouse Drag` (2D View) | Draw a new Box (Trigger SAM) |
 | **Automation** | `P` | **Propagate** selected box to next frame |
+| **Interpolation** | `I` | **Interpolate** selected box to next frame |
 | **Management** | `Del` | Delete selected box |
 | **System** | `Ctrl + S` | Force Save (Auto-save is on by default) |
 | **3D View** | `Left Drag` / `Right Drag` | Rotate / Pan Camera |

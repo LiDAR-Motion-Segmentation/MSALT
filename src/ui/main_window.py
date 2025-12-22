@@ -30,6 +30,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("SALT: Sensor Fusion Annotator")
         self.resize(1920, 1080)
         self.data_controller = data_controller
+        
+        # Initialize Manager and Load Frames
         self.annotation_manager = AnnotationManager()
         base_out = Path(self.data_controller.cfg.output.dir)
         self.annotation_manager.load_frames(
@@ -51,82 +53,78 @@ class MainWindow(QMainWindow):
         if self.data_controller.get_total_frames() > 0:
             self.load_frame(0)
 
-        self.automation_panel = AutomationPanel()
-        self.add_dock(
-            self.automation_panel, "Automation", Qt.DockWidgetArea.LeftDockWidgetArea
-        )
-
-        # Connect the Button
-        self.automation_panel.propagate_requested.connect(self.propagate_selection)
-
-        # Keep the 'P' Shortcut (Global)
-        self.shortcut_p = QShortcut(QKeySequence("P"), self)
-        self.shortcut_p.activated.connect(self.propagate_selection)
 
     def _init_ui(self):
-        # assembling UI using dock widgets
+        
+        # CENTER: LiDAR View 
+        self.lidar_widget = LidarVisualizer()
+        self.setCentralWidget(self.lidar_widget)
 
-        # Camera Strip
+        # TOP: Camera Strip 
         cam_ids = self.data_controller.get_camera_ids()
         self.cam_widget = CameraStripWidget(cam_ids)
         self.add_dock(self.cam_widget, "Cameras", Qt.DockWidgetArea.TopDockWidgetArea)
 
-        # LiDAR View (Central focused)
-        self.lidar_widget = LidarVisualizer()
-        # We set LiDAR as the Main Central Widget for maximum space
-        self.setCentralWidget(self.lidar_widget)
+        # LEFT: Automation Panel 
+        # Initialize this HERE before connecting signals
+        self.automation_panel = AutomationPanel()
+        self.add_dock(
+            self.automation_panel, "Automation", Qt.DockWidgetArea.LeftDockWidgetArea
+        )
+        # Connect Signals
+        self.automation_panel.propagate_requested.connect(self.propagate_selection)
+        self.automation_panel.interpolate_requested.connect(self.interpolate_selection)
 
-        # Playback Controls (Bottom Dock)
+        # BOTTOM: Playback 
         self.playback = PlaybackWidget()
         self.playback.setup_timeline(self.data_controller.get_total_frames())
-
-        # A Dock at the bottom is best for timeline.
         dock_timeline = QDockWidget("Timeline", self)
         dock_timeline.setWidget(self.playback)
         dock_timeline.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock_timeline)
 
-        # Shortcut for saving
+        # RIGHT: Annotation List 
+        self.list_panel = AnnotationListWidget()
+        self.add_dock(
+            self.list_panel, "Annotations", Qt.DockWidgetArea.RightDockWidgetArea
+        )
+        self.list_panel.box_selected.connect(self.on_box_selected)
+        self.list_panel.box_deleted.connect(self.on_box_deleted)
+
+        # RIGHT: Inspector 
+        self.inspector = InspectorWidget()
+        self.add_dock(
+            self.inspector, "Inspector", Qt.DockWidgetArea.RightDockWidgetArea
+        )
+        self.inspector.box_changed.connect(self.on_box_edited)
+        
+        # Save (Ctrl+S)
         save_action = QAction("Save Annotations", self)
         save_action.setShortcut(QKeySequence("Ctrl+S"))
         save_action.triggered.connect(self.save_current_work)
         self.addAction(save_action)
 
-        # Annotation List Dock
-        self.list_panel = AnnotationListWidget()
-        self.add_dock(
-            self.list_panel, "Annotations", Qt.DockWidgetArea.RightDockWidgetArea
-        )
-
-        # Connect Signals
-        self.list_panel.box_selected.connect(self.on_box_selected)
-        self.list_panel.box_deleted.connect(self.on_box_deleted)
-
-        # Right Arrow -> Next Frame
+        # Navigation (Arrows)
         self.shortcut_next = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
         self.shortcut_next.activated.connect(self.next_frame)
 
-        # Left Arrow -> Previous Frame
         self.shortcut_prev = QShortcut(QKeySequence(Qt.Key.Key_Left), self)
         self.shortcut_prev.activated.connect(self.prev_frame)
 
-        # Spacebar -> Play/Pause
+        # Playback (Space)
         self.shortcut_play = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
         self.shortcut_play.activated.connect(self.toggle_play)
 
-        # Delete box
+        # Delete (Del) - Global Context
         self.shortcut_del = QShortcut(QKeySequence(Qt.Key.Key_Delete), self)
         self.shortcut_del.setContext(Qt.ShortcutContext.ApplicationShortcut)
         self.shortcut_del.activated.connect(self.delete_selection)
         
-        # Inspector dock
-        self.inspector = InspectorWidget()
-        self.add_dock(
-            self.inspector, "Inspector", Qt.DockWidgetArea.RightDockWidgetArea
-        )
-
-        # Connect: When Inspector changes a value, refresh the 3D view
-        self.inspector.box_changed.connect(self.on_box_edited)
+        # Automation Shortcuts (P, I)
+        self.shortcut_p = QShortcut(QKeySequence("P"), self)
+        self.shortcut_p.activated.connect(self.propagate_selection)
+        self.shortcut_interp = QShortcut(QKeySequence("I"), self)
+        self.shortcut_interp.activated.connect(self.interpolate_selection)
         
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
@@ -395,6 +393,7 @@ class MainWindow(QMainWindow):
 
         # Jump to the next frame so user can see the result
         self.load_frame(next_idx)
+        self.save_current_work()
         self.statusBar().showMessage(
             f"Propagated {count} objects to Frame {next_idx}", 2000
         )
@@ -414,3 +413,28 @@ class MainWindow(QMainWindow):
         # Refresh View
         self.load_frame(self.current_frame_idx)
         self.statusBar().showMessage(f"Deleted {len(to_delete)} objects.", 2000)
+        
+    def interpolate_selection(self):
+        """
+        Fills the gap between the PREVIOUS appearance of the selected box
+        and the CURRENT frame.
+        """
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        selected_boxes = [b for b in current_boxes if b.selected]
+        
+        if not selected_boxes:
+            self.statusBar().showMessage("Select a box to interpolate.", 2000)
+            return
+        
+        total_filed = 0
+        for box in selected_boxes:
+            count = self.annotation_manager.run_interpolation(
+                box.track_id,
+                self.current_frame_idx
+            )
+            total_filed += count
+            
+        if total_filed > 0:
+            self.statusBar().showMessage(f"Interpolated {total_filed} frames.", 3000)
+        else:
+            self.statusBar().showMessage("No previous frame found to interpolate from.", 3000)
