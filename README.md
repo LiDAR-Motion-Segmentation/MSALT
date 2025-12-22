@@ -46,7 +46,11 @@ uv run main.py
 | **3D View** | `Left Drag` / `Right Drag` | Rotate / Pan Camera |
 | **3D View** | `Scroll` | Zoom In / Out |
 
-![alt text](./assets/annotation_video_box_editing.mp4)
+<!-- ![alt text](./assets/annotation_video_box_editing.mp4) -->
+
+<video src="./assets/annotation_video_box_editing.mp4" controls title="A short video demonstration" width="600">
+</video>
+
 
 ## Data structure
 - SALT expects your data to be organized as follows. Define the paths in `config/config.yaml`
