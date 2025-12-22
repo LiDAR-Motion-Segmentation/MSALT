@@ -41,7 +41,7 @@ class AnnotationListWidget(QWidget):
         layout.addWidget(self.list_widget)
 
         # Delete Button
-        btn_del = QPushButton("Delete Selected")
+        btn_del = QPushButton("Delete Selected (Del)")
         btn_del.setStyleSheet(
             """
             QPushButton {

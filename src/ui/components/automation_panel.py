@@ -4,6 +4,7 @@ from PyQt6.QtCore import pyqtSignal, Qt
 
 class AutomationPanel(QWidget):
     propagate_requested = pyqtSignal()
+    interpolate_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -14,7 +15,7 @@ class AutomationPanel(QWidget):
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # Title / Header
-        title = QLabel("Automation Tools")
+        title = QLabel("<b>Automation Tools</b>")
         title.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 5px;")
         layout.addWidget(title)
 
@@ -23,11 +24,11 @@ class AutomationPanel(QWidget):
         vbox_seq = QVBoxLayout(grp_seq)
 
         # Propagate Button
-        self.btn_propagate = QPushButton("Propagate Selection")
+        self.btn_propagate = QPushButton("Propagate Selection (P) ")
         self.btn_propagate.setToolTip(
             "Copy selected box to the next frame and auto-fit points."
         )
-
+        self.btn_propagate.clicked.connect(self.propagate_requested.emit)
         # Style it to look like an "Action" button (Blue/Green)
         self.btn_propagate.setStyleSheet(
             """
@@ -42,11 +43,32 @@ class AutomationPanel(QWidget):
             QPushButton:pressed { background-color: #1abc9c; }
         """
         )
-        self.btn_propagate.clicked.connect(self.propagate_requested.emit)
+        layout.addWidget(self.btn_propagate)
 
-        vbox_seq.addWidget(self.btn_propagate)
-        layout.addWidget(grp_seq)
+        # interpolate button
+        self.btn_interp = QPushButton("Interpolate (I)")
+        self.btn_interp.setToolTip("Linearly fill gaps between previous frame and this one")
+        self.btn_interp.clicked.connect(self.interpolate_requested.emit)
+        
+        self.btn_interp.setStyleSheet("""
+            QPushButton {
+                background-color: #FFFFFF;
+                color: #000000;
+                font-weight: bold;
+                border-radius: 4px;
+                padding: 6px;
+            }
+            QPushButton:hover {
+                background-color: #E0E0E0;
+            }
+            QPushButton:pressed {
+                background-color: #B0B0B0;
+            }
+        """)
+        layout.addWidget(self.btn_interp)
+
         layout.addStretch()
+        self.setLayout(layout)
 
     def on_frame_update(self, data):
         """
