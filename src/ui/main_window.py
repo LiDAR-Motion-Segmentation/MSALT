@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     def __init__(self, data_controller: DataController):
         super().__init__()
-        self.setWindowTitle("SALT: Sensor Fusion Annotator")
+        self.setWindowTitle("MSALT: Multi Sensor Fusion Annotator")
         self.resize(1920, 1080)
         self.data_controller = data_controller
         

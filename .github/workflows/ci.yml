@@ -1,5 +1,4 @@
-# .github/workflows/ci.yml
-name: SALT CI Pipeline
+name: MSALT CI Pipeline
 
 # Trigger on Push to Main or Pull Requests
 on:

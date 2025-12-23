@@ -10,7 +10,7 @@ import logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("SALT_Entry")
+logger = logging.getLogger("MSALT_Entry")
 
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
@@ -28,7 +28,7 @@ def main(cfg: DictConfig):
 
         if total_frames == 0:
             logger.warning(
-                "Dataset appears empty. Check your paths in conf/salt_setup/..."
+                "Dataset appears empty. Check your paths in conf/msalt_setup/..."
             )
 
     except Exception as e:

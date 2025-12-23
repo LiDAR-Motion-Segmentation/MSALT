@@ -3,7 +3,7 @@
 xhost +local:docker
 DATA_DIR=${1:-$(pwd)/data}
 
-echo "Starting SALT container..."
+echo "Starting MSALT container..."
 echo "Mapping Data Directory: $DATA_DIR"
 
 docker run -it --rm \

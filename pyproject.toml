@@ -1,7 +1,7 @@
 [project]
-name = "salt-annotator"
+name = "msalt-annotator"
 version = "0.1.0"
-description = "SALT: Segment, Annotate, Label, Track - A Sensor Fusion Annotation Tool"
+description = "MSALT: Segment, Annotate, Label, Track - A Sensor Fusion Annotation Tool"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

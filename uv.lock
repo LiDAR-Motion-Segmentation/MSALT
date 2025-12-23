@@ -2004,7 +2004,7 @@ wheels = [
 ]
 
 [[package]]
-name = "salt-annotator"
+name = "msalt-annotator"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
