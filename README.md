@@ -1,9 +1,9 @@
-# SALT (Sensor Annotation & Labelling Tool)
-[![SALT CI Pipeline](https://github.com/LiDAR-Motion-Segmentation/SALT/actions/workflows/ci.yml/badge.svg)](https://github.com/LiDAR-Motion-Segmentation/SALT/actions/workflows/ci.yml)
+# MSALT (Multi Sensor Annotation & Labelling Tool)
+[![MSALT CI Pipeline](https://github.com/LiDAR-Motion-Segmentation/MSALT/actions/workflows/ci.yml/badge.svg)](https://github.com/LiDAR-Motion-Segmentation/MSALT/actions/workflows/ci.yml)
 [![Badge for OS](https://img.shields.io/badge/OS-Ubuntu_22.04-blue)](https://releases.ubuntu.com/jammy/)
 
 ## 3D Sensor Fusion Annotation Tool
-SALT is a high-performance, open-source annotation tool designed for sensor fusion tasks. It bridges the gap between 2D camera imagery and 3D LiDAR point clouds, offering AI-assisted labeling workflows to accelerate dataset creation for autonomous robotics.
+MSALT is a high-performance, open-source annotation tool designed for sensor fusion tasks. It bridges the gap between 2D camera imagery and 3D LiDAR point clouds, offering AI-assisted labeling workflows to accelerate dataset creation for autonomous robotics.
 
 ### Features:
 
@@ -16,9 +16,9 @@ SALT is a high-performance, open-source annotation tool designed for sensor fusi
 
 ## Installation
 ```python3
-# SALT uses uv for blazing fast dependency management.
-git clone https://github.com/LiDAR-Motion-Segmentation/SALT.git
-cd SALT
+# MSALT uses uv for blazing fast dependency management.
+git clone https://github.com/LiDAR-Motion-Segmentation/MSALT.git
+cd MSALT
 
 # Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -53,7 +53,7 @@ uv run main.py
 
 
 ## Data structure
-- SALT expects your data to be organized as follows. Define the paths in `config/config.yaml`
+- MSALT expects your data to be organized as follows. Define the paths in `config/config.yaml`
 ```
 /path/to/dataset/
 ├── velodyne/             # LiDAR Point Clouds (.pcd or .bin)
@@ -71,7 +71,7 @@ uv run main.py
 ![alt text](./assets/flowchart_v3.png)
 
 ## Directory Structure
-- SALT follows a modular `Model-View-Controller (MVC)` pattern to separate UI logic from geometric processing.
+- MSALT follows a modular `Model-View-Controller (MVC)` pattern to separate UI logic from geometric processing.
 ```
 ├── config
 │   ├── config.yaml
