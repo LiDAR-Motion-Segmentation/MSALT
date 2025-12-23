@@ -27,7 +27,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 uv run main.py
 ```
-![alt text](./assets/ui_v8.png)
+![alt text](./assets/ui_v9.png)
 
 ## Model weights
 - Download the SAM 2 checkpoints and place them in the checkpoints/ directory (create if missing).

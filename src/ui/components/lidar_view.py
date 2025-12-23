@@ -1,6 +1,6 @@
 from PyQt6.QtGui import QPainter, QColor, QFont, QVector3D
 from pyqtgraph.Qt.QtGui import QMatrix4x4
-from PyQt6.QtCore import Qt, QRect
+from PyQt6.QtCore import QRect
 import pyqtgraph.opengl as gl
 import numpy as np
 from PyQt6.QtWidgets import QVBoxLayout
