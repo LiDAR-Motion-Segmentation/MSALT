@@ -80,3 +80,30 @@ class AddBoxCommand(Command):
     def name(self) -> str:
         return f"Add Box {self.box.track_id}"
     
+class ModifyBoxCommand(Command):
+    """
+    Handles updates to geometry or labels. 
+    Crucial: Requires 'before' and 'after' states.
+    """
+    def __init__(self, 
+                 manager: AnnotationManager, 
+                 frame_idx: int, 
+                 old_box: BoundingBox3D, 
+                 new_box: BoundingBox3D) -> None:
+        self.manager = manager
+        self.frame_idx = frame_idx
+        self.old_state = deepcopy(old_box)
+        self.new_state = deepcopy(new_box)
+        
+    def execute(self) -> bool:
+        self.manager.delete_box(self.frame_idx, self.old_state)
+        self.manager.add_box(self.frame_idx, self.old_state)
+        return True
+    
+    def undo(self) -> None:
+        self.manager.delete_box(self.frame_idx, self.old_state)
+        self.manager.add_box(self.frame_idx, self.old_state)
+        
+    def name(self) -> str:
+        return f"Modify Box {self.new_state.track_id}"
+    
