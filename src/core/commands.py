@@ -1,0 +1,64 @@
+from abc import ABC, abstractmethod
+from typing import List, Optional
+import logging
+
+
+logger = logging.getLogger(__name__)
+
+class Command(ABC):
+    """Abstract Base Class for all editor commands."""
+    
+    @abstractmethod
+    def execute(self) -> bool:
+        """Applies the logic. Returns True if successful."""
+        pass
+    
+    @abstractmethod
+    def undo(self) -> None:
+        """Reverts the logic."""
+        pass
+    
+    @abstractmethod
+    def name(self) -> str:
+        """Returns a human-readable name for the UI (e.g. 'Undo Delete')."""
+        pass
+    
+class CommandHistory:
+    """
+    Manages the stack of commands for Undo/Redo functionality.
+    Follows a Singleton-like usage within the MainWindow.
+    """
+    def __init__(self, max_history: int = 50) -> None:
+        self._undo_stack: List[Command] = []
+        self._redo_stack: List[Command] = []
+        self._max_history = max_history
+        
+    def push(self, command: Command):
+        if command.execute():
+            self._undo_stack.append(command)
+            self._redo_stack.append(command)
+            
+            # to enforce stack limit
+            if len(self._undo_stack) > self._max_history:
+                self._undo_stack.pop(0)
+                
+            logger.debug(f"Command Executed: {command.name()}")
+            
+    def undo(self) -> Optional[str]:
+        if not self._undo_stack:
+            return None
+        
+        cmd = self._undo_stack.pop()
+        cmd.undo()
+        self._redo_stack.append(cmd)
+        return cmd.name()
+    
+    def redo(self) -> Optional[str]:
+        if not self._redo_stack:
+            return None
+        
+        cmd = self._redo_stack.pop()
+        cmd.execute()
+        self._undo_stack.append(cmd)
+        return cmd.name()
+    
