@@ -107,3 +107,24 @@ class ModifyBoxCommand(Command):
     def name(self) -> str:
         return f"Modify Box {self.new_state.track_id}"
     
+class BulkDeleteCommand(Command):
+    """Composite command for deleting multiple boxes at once."""
+    def __init__(self, 
+                 manager: AnnotationManager, 
+                 frame_idx: int,
+                 boxes: List[BoundingBox3D]) -> None:
+        self.manager = manager
+        self.frame_idx = frame_idx
+        self.boxes = [deepcopy(b) for b in boxes]
+        
+    def execute(self) -> bool:
+        for box in self.boxes:
+            self.manager.delete_box(self.frame_idx, box)
+        return True
+    
+    def undo(self) -> None:
+        for box in self.boxes:
+            self.manager.add_box(self.frame_idx, box)
+            
+    def name(self) -> str:
+        return f"Delete {len(self.boxes)} Boxes"
