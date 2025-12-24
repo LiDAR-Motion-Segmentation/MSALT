@@ -1,3 +1,6 @@
+from PyQt6.QtGui import QPainter, QColor, QFont, QVector3D
+from pyqtgraph.Qt.QtGui import QMatrix4x4
+from PyQt6.QtCore import QRect
 import pyqtgraph.opengl as gl
 import numpy as np
 from PyQt6.QtWidgets import QVBoxLayout
@@ -5,7 +8,56 @@ from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
 from src.core.objects import BoundingBox3D
 
-
+class CustomGLWidget(gl.GLViewWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.overlay_boxes = []
+        
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        
+        # 2D painter to draw on the top
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QColor(255, 255, 255)) # white text
+        painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        
+        # Get Matrices for Projection
+        view_matrix = self.viewMatrix()
+        w = self.width()
+        h = self.height()
+        fov = self.opts.get('fov', 60) # Default to 60 if missing
+        near_clip = 0.01
+        far_clip = 10000.0
+        
+        proj_matrix = QMatrix4x4()
+        
+        # Standard perspective projection: fov (deg), aspect ratio, near, far
+        proj_matrix.perspective(fov, w / h, near_clip, far_clip)
+       
+        # Viewport is (x, y, width, height)
+        viewport = QRect(0, 0, w, h)
+        
+        for box in self.overlay_boxes:
+            # Get center of the box
+            cx, cy, cz = box.x, box.y, box.z + (box.dz / 2.0) # Top of box
+            
+            # project 3D world to a 2D screen
+            obj_vec = QVector3D(cx, cy, cz)
+            screen_pos = obj_vec.project(view_matrix, proj_matrix, viewport)
+            
+            # If z is between 0 and 1, it's inside the frustum depth-wise
+            if 0.0 <= screen_pos.z() <= 1.0:
+                # We must invert Y: screen_y = height - projected_y
+                screen_x = screen_pos.x()
+                screen_y = h - screen_pos.y()
+                
+                # Draw the ID
+                label_text = f"{box.track_id}: {box.label}"
+                painter.drawText(int(screen_x), int(screen_y) - 10, label_text)
+                
+        painter.end()      
+        
 class LidarVisualizer(BasePluginWidget):
     def __init__(self):
         super().__init__(title="LiDAR 3D View")
@@ -18,7 +70,7 @@ class LidarVisualizer(BasePluginWidget):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self.view_widget = gl.GLViewWidget()
+        self.view_widget = CustomGLWidget()
         self.view_widget.opts["distance"] = 20
 
         # grid
@@ -39,7 +91,6 @@ class LidarVisualizer(BasePluginWidget):
             self.current_points = data.point_cloud  # (N, 3)
 
             # Color Map Logic (Height Based)
-            # Optimization: need to do this in C++ or use a pre-computed texture
             z = self.current_points[:, 2]
             colors = np.ones((self.current_points.shape[0], 4))
             colors[:, 0] = np.clip((z + 2) / 5, 0, 1)  # R
@@ -48,6 +99,8 @@ class LidarVisualizer(BasePluginWidget):
             self.scatter.setData(pos=self.current_points, color=colors, size=2)
 
     def update_boxes(self, boxes: list[BoundingBox3D]):
+        self.view_widget.overlay_boxes = boxes
+        
         # clear old boxes
         for item in self.box_items:
             self.view_widget.removeItem(item)
@@ -63,8 +116,8 @@ class LidarVisualizer(BasePluginWidget):
 
             class_colors = {
                 "moving_people": [1.0, 0.0, 0.0, 1.0],  # Red
-                "static_people": [1.0, 1.0, 0.0, 1.0],  # Sky Blue
-                "static_car": [0.0, 0.5, 1.0, 1.0],  # Yellow
+                "static_people": [1.0, 1.0, 0.0, 1.0],  # Yellow
+                "static_car": [0.0, 0.5, 1.0, 1.0],  # Sky Blue
                 "cyclist": [1.0, 0.5, 0.0, 1.0],  # Orange
                 "noise": [0.5, 0.0, 0.5, 1.0],  # Purple
             }
@@ -82,7 +135,7 @@ class LidarVisualizer(BasePluginWidget):
             # Update the scatter plot
             self.scatter.setData(pos=self.current_points, color=colors, size=2)
 
-        # Draw new boxes
+        # Draw new box lines
         # Connectivity for a cube wireframe (lines between corner indices)
         # Corners are 0-7.
         lines_indices = np.array(
@@ -121,13 +174,15 @@ class LidarVisualizer(BasePluginWidget):
 
             self.view_widget.addItem(line_item)
             self.box_items.append(line_item)
+            
+        # trigger a repaint to draw the next text
+        self.view_widget.update()
 
     def reset(self):
         self.scatter.setData(pos=np.zeros((0, 3)))
 
     def draw_debug_lines(self, lines_list):
         """Draws persistent debug rays."""
-        # 1. Clear OLD debug lines (so we don't have 1000 lines cluttering)
         for item in self.debug_items:
             self.view_widget.removeItem(item)
         self.debug_items.clear()
@@ -135,7 +190,6 @@ class LidarVisualizer(BasePluginWidget):
         if not lines_list:
             return
 
-        # 2. Prepare Data
         pts = []
         for line in lines_list:
             pts.append(line[0])  # Start (Camera Origin)
@@ -143,12 +197,10 @@ class LidarVisualizer(BasePluginWidget):
 
         pts_arr = np.array(pts)
 
-        # 3. Debug Print (Check console!)
         print(f"DEBUG: Drawing {len(lines_list)} lines.")
         print(f"DEBUG: Start Point (Cam): {pts_arr[0]}")
         print(f"DEBUG: End Point (Ray): {pts_arr[1]}")
 
-        # 4. Draw
         line_item = gl.GLLinePlotItem(
             pos=pts_arr,
             mode="lines",

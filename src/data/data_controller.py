@@ -14,7 +14,7 @@ class DataController:
         self._init_loader()
         
     def _init_loader(self):
-        setup = self.cfg.salt_setup
+        setup = self.cfg.msalt_setup
         
         camera_configs_list = []
         if 'cameras' in setup.paths:
