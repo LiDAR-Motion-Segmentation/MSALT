@@ -77,9 +77,12 @@ uv run main.py
 │   ├── config.yaml
 │   ├── models
 │   │   └── default.yaml
-│   └── salt_setup
+│   └── msalt_setup
 │       ├── husky_setup.yaml
 │       └── semantic_kitty.yaml
+├── Docker
+│   ├── Dockerfile
+│   └── run_docker.sh
 ├── debug_config.py
 ├── main.py
 ├── pyproject.toml
