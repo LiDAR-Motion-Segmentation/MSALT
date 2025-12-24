@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from typing import List, Optional
 import logging
-
+from src.core.objects import BoundingBox3D
+from src.core.annotation_manager import AnnotationManager
 
 logger = logging.getLogger(__name__)
 
@@ -61,4 +63,20 @@ class CommandHistory:
         cmd.execute()
         self._undo_stack.append(cmd)
         return cmd.name()
+    
+class AddBoxCommand(Command):
+    def __init__(self, manager: AnnotationManager, frame_idx: int, box: BoundingBox3D) -> None:
+        self.manager = manager
+        self.frame_idx = frame_idx
+        self.box = deepcopy(box)
+        
+    def execute(self) -> bool:
+        self.manager.add_box(self.frame_idx, self.box)
+        return True
+    
+    def undo(self) -> None:
+        self.manager.delete_box(self.frame_idx, self.box)
+        
+    def name(self) -> str:
+        return f"Add Box {self.box.track_id}"
     
