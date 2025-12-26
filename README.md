@@ -1,3 +1,6 @@
+<div align="center">
+  <img src="assets/logo_v1.png" alt="MSALT Logo" width="250" height="250">
+
 # MSALT (Multi Sensor Annotation & Labelling Tool)
 [![MSALT CI Pipeline](https://github.com/LiDAR-Motion-Segmentation/MSALT/actions/workflows/ci.yml/badge.svg)](https://github.com/LiDAR-Motion-Segmentation/MSALT/actions/workflows/ci.yml)
 [![Badge for OS](https://img.shields.io/badge/OS-Ubuntu_22.04-blue)](https://releases.ubuntu.com/jammy/)
