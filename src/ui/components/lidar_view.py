@@ -8,6 +8,21 @@ from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
 from src.core.objects import BoundingBox3D
 
+def get_projection_matrix(w: int, h: int, fov: float, distance: float) -> QMatrix4x4:
+    """
+    Pure function to calculate projection matrix. 
+    Decouples math from UI state.
+    """
+    matrix = QMatrix4x4()
+    aspect = w / h if h > 0 else 1.0
+    
+    # Dynamic clipping planes based on camera distance to prevent z-fighting
+    near_clip = max(distance * 0.001, 0.01)
+    far_clip = distance * 1000.0
+    
+    matrix.perspective(fov, aspect, near_clip, far_clip)
+    return matrix
+
 class CustomGLWidget(gl.GLViewWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -26,14 +41,13 @@ class CustomGLWidget(gl.GLViewWidget):
         view_matrix = self.viewMatrix()
         w = self.width()
         h = self.height()
-        fov = self.opts.get('fov', 60) # Default to 60 if missing
-        near_clip = 0.01
-        far_clip = 10000.0
         
-        proj_matrix = QMatrix4x4()
-        
-        # Standard perspective projection: fov (deg), aspect ratio, near, far
-        proj_matrix.perspective(fov, w / h, near_clip, far_clip)
+        proj_matrix = get_projection_matrix(
+            w, 
+            h, 
+            self.opts.get('fov', 60), 
+            self.opts.get('distance', 20)
+        )
        
         # Viewport is (x, y, width, height)
         viewport = QRect(0, 0, w, h)
