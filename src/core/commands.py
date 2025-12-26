@@ -128,3 +128,19 @@ class BulkDeleteCommand(Command):
             
     def name(self) -> str:
         return f"Delete {len(self.boxes)} Boxes"
+    
+class DeleteBoxCommand(Command):
+    def __init__(self, manager: AnnotationManager, frame_idx: int, box: BoundingBox3D) -> None:
+        self.manager = manager
+        self.frame_idx = frame_idx
+        self.box = deepcopy(box) # trying to save the state before deleting
+        
+    def execute(self) -> bool:
+        self.manager.delete_box(self.frame_idx, self.box)
+        return True
+    
+    def undo(self) -> None:
+        self.manager.add_box(self.frame_idx, self.box)
+        
+    def name(self) -> str:
+        return f"Delete Box {self.box.track_id}"

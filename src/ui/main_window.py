@@ -17,6 +17,12 @@ from src.core.annotation_manager import AnnotationManager
 from src.core.objects import BoundingBox3D
 from src.core.geometry import GeometryUtils
 from src.core.segmentation import SegmentationEngine
+from src.core.commands import (
+    CommandHistory, 
+    AddBoxCommand, 
+    BulkDeleteCommand
+)
+
 import logging
 import numpy as np
 from collections import defaultdict
@@ -39,6 +45,9 @@ class MainWindow(QMainWindow):
         )
 
         self.seg_engine = SegmentationEngine(self.data_controller.cfg.models)
+
+        # Initializing the history
+        self.history = CommandHistory()
 
         # State tracking
         self.current_frame_idx = 0
@@ -103,6 +112,17 @@ class MainWindow(QMainWindow):
         save_action.setShortcut(QKeySequence("Ctrl+S"))
         save_action.triggered.connect(self.save_current_work)
         self.addAction(save_action)
+        
+        # Undo (Ctrl+Z) and Redo (Ctrl+Y)
+        undo_action = QAction("Undo", self)
+        undo_action.setShortcut(QKeySequence("Ctrl+Z"))
+        undo_action.triggered.connect(self.undo_action)
+        self.addAction(undo_action)
+        
+        redo_action = QAction("Redo", self)
+        redo_action.setShortcut(QKeySequence("Ctrl+Y")) 
+        redo_action.triggered.connect(self.redo_action)
+        self.addAction(redo_action)
 
         # Navigation (Arrows)
         self.shortcut_next = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
@@ -269,7 +289,13 @@ class MainWindow(QMainWindow):
             new_box.source_2d = {"cam_id": cam_id, "rect": [x, y, w, h]}
 
             # Save and Refresh
-            self.annotation_manager.add_box(self.current_frame_idx, new_box)
+            cmd = AddBoxCommand(
+                self.annotation_manager, 
+                self.current_frame_idx, 
+                new_box
+            )
+            self.history.push(cmd)
+            
             self.load_frame(self.current_frame_idx)  # Redraw UI
             self.save_current_work()
 
@@ -406,12 +432,17 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("No box selected to delete.", 2000)
             return
         
-        # Perform Delete
-        for box in to_delete:
-            self.annotation_manager.remove_box(self.current_frame_idx, box.track_id)
+        # # Perform Delete
+        cmd = BulkDeleteCommand(
+            self.annotation_manager, 
+            self.current_frame_idx, 
+            to_delete
+        )
+        self.history.push(cmd)
             
         # Refresh View
         self.load_frame(self.current_frame_idx)
+        self.save_current_work()
         self.statusBar().showMessage(f"Deleted {len(to_delete)} objects.", 2000)
         
     def interpolate_selection(self):
@@ -438,3 +469,20 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Interpolated {total_filed} frames.", 3000)
         else:
             self.statusBar().showMessage("No previous frame found to interpolate from.", 3000)
+            
+    def undo_action(self):
+        msg = self.history.undo()
+        if msg:
+            self.load_frame(self.current_frame_idx)
+            self.save_current_work()
+            self.statusBar().showMessage(f"Undid: {msg}", 2000)
+        else:
+            self.statusBar().showMessage("Nothing to undo.", 1000)
+            
+    def redo_action(self):
+        msg = self.history.redo()
+        if msg:
+            self.load_frame(self.current_frame_idx)
+            self.save_current_work()
+            self.statusBar().showMessage(f"Redid: {msg}", 2000)
+            
