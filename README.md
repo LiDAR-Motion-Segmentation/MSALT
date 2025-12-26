@@ -4,6 +4,7 @@
 # MSALT (Multi Sensor Annotation & Labelling Tool)
 [![MSALT CI Pipeline](https://github.com/LiDAR-Motion-Segmentation/MSALT/actions/workflows/ci.yml/badge.svg)](https://github.com/LiDAR-Motion-Segmentation/MSALT/actions/workflows/ci.yml)
 [![Badge for OS](https://img.shields.io/badge/OS-Ubuntu_22.04-blue)](https://releases.ubuntu.com/jammy/)
+</div>
 
 ## 3D Sensor Fusion Annotation Tool
 MSALT is a high-performance, open-source annotation tool designed for sensor fusion tasks. It bridges the gap between 2D camera imagery and 3D LiDAR point clouds, offering AI-assisted labeling workflows to accelerate dataset creation for autonomous robotics.
