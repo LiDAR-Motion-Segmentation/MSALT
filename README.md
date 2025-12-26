@@ -43,6 +43,8 @@ uv run main.py
 | **Interpolation** | `I` | **Interpolate** selected box to next frame |
 | **Management** | `Del` | Delete selected box |
 | **System** | `Ctrl + S` | Force Save (Auto-save is on by default) |
+| **Undo** | `Ctrl + Z` | Undo changes |
+| **Redo** | `Ctrl + Y` | Redo changes |
 | **3D View** | `Left Drag` / `Right Drag` | Rotate / Pan Camera |
 | **3D View** | `Scroll` | Zoom In / Out |
 
@@ -91,6 +93,7 @@ uv run main.py
 ├── src
 │   ├── core
 │   │   ├── annotation_manager.py
+|   |   ├── commands.py
 │   │   ├── geometry.py
 │   │   ├── objects.py
 │   │   └── segmentation.py
