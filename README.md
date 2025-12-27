@@ -51,6 +51,7 @@ uv run main.py
 | **Redo** | `Ctrl + Y` | Redo changes |
 | **3D View** | `Left Drag` / `Right Drag` | Rotate / Pan Camera |
 | **3D View** | `Scroll` | Zoom In / Out |
+| **3D Box allignment** | `R` | PCA trigger for correct 3D box allignment |
 
 ![alt text](./assets/UI_action.gif)
 
