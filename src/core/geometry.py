@@ -342,3 +342,52 @@ class GeometryUtils:
             'label': box_start.label,    
             'track_id': box_start.track_id
         }
+        
+    @staticmethod
+    def refine_heading(points: np.ndarray, current_heading: float) -> float:
+        """
+        Uses PCA (Principal Component Analysis) to find the dominant axis 
+        of the point cloud and align the heading.
+        
+        Args:
+            points: (N, 3) points inside the box.
+            current_heading: The current yaw estimate (to fix 180-degree ambiguity).
+        
+        Returns:
+            new_heading: refined yaw in radians.
+        """
+        if len(points) < 5:
+            return current_heading # Not enough points to be reliable
+        
+        # project to ground plane
+        xy_points = points[:, :2]
+        
+        # Center the points first to remove translation
+        mean = np.mean(xy_points, axis=0)
+        centered = xy_points - mean
+        
+        # cov = (X.T @ X) / (N-1)
+        cov = np.cov(centered.T)
+        
+        # eigenvalues = magnitude of variance
+        # eigenvectors = direction of variance
+        evals, evecs = np.linalg.eig(cov)
+        
+        # evecs are columns. evecs[:, i] corresponds to eval[i]
+        idx = np.argmax(evals)
+        major_axis = evecs[:, idx] # [dx, dy] vector
+        
+        # calculate angle from vector
+        pca_heading = np.arctan2(major_axis[1], major_axis[0])
+        
+        # normalize diff to [-pi, pi] to check alignment
+        diff = pca_heading - current_heading
+        diff = (diff + np.pi) % (2 * np.pi) - np.pi
+        
+        if abs(diff) > (np.pi / 2):
+            pca_heading += np.pi
+            
+        # normalize final results to standard [-pi, pi] range
+        pca_heading = (pca_heading + np.pi) % (2 * np.pi) - np.pi
+        
+        return pca_heading

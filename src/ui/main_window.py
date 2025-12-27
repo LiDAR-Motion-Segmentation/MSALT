@@ -146,6 +146,10 @@ class MainWindow(QMainWindow):
         self.shortcut_interp = QShortcut(QKeySequence("I"), self)
         self.shortcut_interp.activated.connect(self.interpolate_selection)
         
+        # Refine heading (R)
+        self.shortcut_refine = QShortcut(QKeySequence("R"), self)
+        self.shortcut_refine.activated.connect(self.refine_selection)
+        
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
 
@@ -177,6 +181,12 @@ class MainWindow(QMainWindow):
         self.current_frame_idx = idx
         self.current_frame_data = self.data_controller.get_frame(idx)
         boxes = self.annotation_manager.get_boxes(idx)
+        
+        # Explicitly deselect all boxes when entering a new frame.
+        # This prevents the "Yellow Box" from persisting visually when it shouldn't.
+        for b in boxes:
+            b.selected = False
+        
         boxes_2d_map = defaultdict(list)
 
         # prepare 2D Box Map for Camera View
@@ -191,6 +201,7 @@ class MainWindow(QMainWindow):
         # update for plugins
         for plugin in self.plugins:
             plugin.on_frame_update(self.current_frame_data)
+            
 
         self.cam_widget.update_2d_boxes(boxes_2d_map)
         self.lidar_widget.on_frame_update(self.current_frame_data)
@@ -485,4 +496,47 @@ class MainWindow(QMainWindow):
             self.load_frame(self.current_frame_idx)
             self.save_current_work()
             self.statusBar().showMessage(f"Redid: {msg}", 2000)
+    
+    def refine_selection(self):
+        """
+        Applies PCA to the selected box to fix its rotation.
+        """
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        selected_boxes = [b for b in current_boxes if b.selected]
+        
+        if not selected_boxes:
+            self.statusBar().showMessage("Select a box to refine (R).", 2000)
+            return
+        
+        if self.current_frame_data is None or self.current_frame_data.point_cloud is None:
+            return
+        
+        count = 0
+        points = self.current_frame_data.point_cloud
+        
+        for box in selected_boxes:
+            indices = GeometryUtils.get_points_in_box(points, box)
             
+            if len(indices) < 5:
+                logger.warning(f"ID {box.track_id}: Not enough points to refine.")
+                continue
+            
+            box_points = points[indices]
+            new_heading = GeometryUtils.refine_heading(box_points, box.heading)
+            old_heading = box.heading
+            box.heading = float(new_heading)
+            
+            logger.info(f"Refined ID {box.track_id}: {old_heading:.2f} -> {new_heading:.2f}")
+            count += 1
+            
+        if count > 0:
+            self.save_current_work()
+            
+            # Force UI Refresh
+            self.lidar_widget.update_boxes(current_boxes) 
+            
+            # Update Inspector values if a single box is selected
+            if len(selected_boxes) == 1:
+                self.inspector.set_box(selected_boxes[0])
+            
+            self.statusBar().showMessage(f"Refined {count} boxes via PCA.", 2000)

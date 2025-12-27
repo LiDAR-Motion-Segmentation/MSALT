@@ -1,6 +1,10 @@
+<div align="center">
+  <img src="assets/logo_v1.png" alt="MSALT Logo" width="250" height="250">
+
 # MSALT (Multi Sensor Annotation & Labelling Tool)
 [![MSALT CI Pipeline](https://github.com/LiDAR-Motion-Segmentation/MSALT/actions/workflows/ci.yml/badge.svg)](https://github.com/LiDAR-Motion-Segmentation/MSALT/actions/workflows/ci.yml)
 [![Badge for OS](https://img.shields.io/badge/OS-Ubuntu_22.04-blue)](https://releases.ubuntu.com/jammy/)
+</div>
 
 ## 3D Sensor Fusion Annotation Tool
 MSALT is a high-performance, open-source annotation tool designed for sensor fusion tasks. It bridges the gap between 2D camera imagery and 3D LiDAR point clouds, offering AI-assisted labeling workflows to accelerate dataset creation for autonomous robotics.
@@ -47,6 +51,7 @@ uv run main.py
 | **Redo** | `Ctrl + Y` | Redo changes |
 | **3D View** | `Left Drag` / `Right Drag` | Rotate / Pan Camera |
 | **3D View** | `Scroll` | Zoom In / Out |
+| **3D Box allignment** | `R` | PCA trigger for correct 3D box allignment |
 
 ![alt text](./assets/UI_action.gif)
 
