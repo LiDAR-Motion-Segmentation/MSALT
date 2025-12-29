@@ -55,3 +55,32 @@ class BoundingBox3D:
         if self.selected:
             return (1.0, 1.0, 0.0, 1.0)  # Yellow if selected
         return (0.0, 1.0, 0.0, 1.0)  # Green by default
+
+    def __eq__(self, other) -> bool:
+        """
+        Custom equality check to handle NumPy arrays safely.
+        """
+        if not isinstance(other, BoundingBox3D):
+            return False
+        
+        scalars_match = (
+            self.track_id == other.track_id and
+            self.label == other.label and
+            np.isclose(self.x, other.x) and
+            np.isclose(self.y, other.y) and
+            np.isclose(self.z, other.z) and
+            np.isclose(self.dx, other.dx) and
+            np.isclose(self.dy, other.dy) and
+            np.isclose(self.dz, other.dz) and
+            np.isclose(self.heading, other.heading)
+        )
+        
+        if not scalars_match:
+            return False
+        
+        if self.point_indices is None and other.point_indices is None:
+            return True
+        if self.point_indices is None or other.point_indices is None:
+            return False
+            
+        return np.array_equal(self.point_indices, other.point_indices)
