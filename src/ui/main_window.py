@@ -68,6 +68,7 @@ class MainWindow(QMainWindow):
         # CENTER: LiDAR View 
         self.lidar_widget = LidarVisualizer()
         self.setCentralWidget(self.lidar_widget)
+        self.lidar_widget.view_widget.box_created.connect(self.handle_3d_annotation)
 
         # TOP: Camera Strip 
         cam_ids = self.data_controller.get_camera_ids()
@@ -540,3 +541,29 @@ class MainWindow(QMainWindow):
                 self.inspector.set_box(selected_boxes[0])
             
             self.statusBar().showMessage(f"Refined {count} boxes via PCA.", 2000)
+            
+    def handle_3d_annotation(self, cx, cy, cz, dx, dy, dz, heading):
+        # create box
+        new_box = BoundingBox3D(
+            x=cx,
+            y=cy,
+            z=cz,
+            dx=dx,
+            dy=dy,
+            dz=dz,
+            heading=heading,
+            label=self.list_panel.get_current_label()
+        )
+        
+        # add to manager
+        self.annotation_manager.add_box(self.current_frame_idx, new_box)
+        
+        # select it
+        new_box.selected = True
+        
+        # refresh
+        self.load_frame(self.current_frame_idx)
+        self.save_current_work()
+        
+        # switch to inspector for fine-tuning
+        self.inspector.set_box(new_box)

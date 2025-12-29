@@ -1,17 +1,25 @@
 from PyQt6.QtGui import QPainter, QColor, QFont, QVector3D
 from pyqtgraph.Qt.QtGui import QMatrix4x4
-from PyQt6.QtCore import QRect
+from PyQt6.QtCore import QRect, Qt, pyqtSignal 
 import pyqtgraph.opengl as gl
 import numpy as np
+import logging
 from PyQt6.QtWidgets import QVBoxLayout
 from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
 from src.core.objects import BoundingBox3D
+from src.core.geometry import GeometryUtils
+
+logger = logging.getLogger(__name__)
+
+class DrawState:
+    IDLE = 0
+    DRAGGING_BASE = 1  # User is defining X/Y dimensions
+    SETTING_HEIGHT = 2 # User is defining Z height
 
 def get_projection_matrix(w: int, h: int, fov: float, distance: float) -> QMatrix4x4:
     """
-    Pure function to calculate projection matrix. 
-    Decouples math from UI state.
+    Calculates the projection matrix matching PyQtGraph's internal state.
     """
     matrix = QMatrix4x4()
     aspect = w / h if h > 0 else 1.0
@@ -24,10 +32,160 @@ def get_projection_matrix(w: int, h: int, fov: float, distance: float) -> QMatri
     return matrix
 
 class CustomGLWidget(gl.GLViewWidget):
+    """
+    Enhanced 3D Viewer with Text Overlay and Mouse Interaction.
+    """
+    # Signal: cx, cy, cz, dx, dy, dz, heading
+    box_created = pyqtSignal(float, float, float, float, float, float, float)
+    
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.overlay_boxes = []
         
+        # Data Storage
+        self.overlay_boxes = []
+
+        # Drawing State
+        self.state = DrawState.IDLE
+        self.draw_start_pt = None   # [x, y, z]
+        self.draw_end_pt = None     # [x, y, z]
+        self.draw_height = 1.5      # Default height
+        self.ground_z = -1.5        # Assumed ground plane
+        
+        # Ghost Box (Visual Feedback while drawing)
+        self.ghost_box = gl.GLBoxItem(color=(0, 255, 255, 255)) # Cyan
+        self.ghost_box.setVisible(False)
+        self.addItem(self.ghost_box)
+        
+    def _get_matrices_np(self):
+        """Helper to extract OpenGL matrices as Numpy arrays."""
+        # View Matrix (World -> Camera)
+        v_data = self.viewMatrix().data() # Tuple of 16 floats
+        view_mat = np.array(v_data, dtype=np.float32).reshape(4, 4)
+        
+        # Projection Matrix (Camera -> Clip)
+        w = self.width()
+        h = self.height()
+        fov = self.opts.get('fov', 60)
+        dist = self.opts.get('distance', 20)
+        
+        qt_proj_mat = get_projection_matrix(w, h, fov, dist)
+        p_data = qt_proj_mat.data()
+        proj_mat = np.array(p_data, dtype=np.float32).reshape(4, 4)
+        
+        return view_mat.T, proj_mat.T
+        
+    def mousePressEvent(self, event):
+        # using ctrl+left click start the process
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            if event.button() == Qt.MouseButton.LeftButton:
+                logger.info(f"Ctrl+Click detected at {event.pos()}")
+                if self.state == DrawState.IDLE:
+                    vm, pm = self._get_matrices_np()
+                    origin, direction = GeometryUtils.screen_to_ray(
+                        event.pos().x(), event.pos().y(),
+                        self.width(), self.height(),
+                        vm, pm 
+                    )
+                    
+                    hit = GeometryUtils.intersect_ray_plane(origin, direction, self.ground_z)
+                    
+                    if hit is not None:
+                        logger.info("State changed to DRAGGING_BASE")
+                        self.state = DrawState.DRAGGING_BASE
+                        self.draw_start_pt = hit
+                        self.draw_end_pt = hit
+                        self.draw_height = 0.0 # start flat
+                        self._update_ghost_box()
+                    else:
+                        logger.info("Ray missed the ground plane!")
+                        
+                elif self.state == DrawState.SETTING_HEIGHT:
+                    # finish drawing
+                    self._finalize_drawing()
+                    self.state = DrawState.IDLE
+                    self.ghost_box.setVisible(False)
+            
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+            
+    def mouseMoveEvent(self, event):
+        if self.state == DrawState.DRAGGING_BASE:
+            vm, pm = self._get_matrices_np()
+            origin, direction = GeometryUtils.screen_to_ray(
+                event.pos().x(), event.pos().y(),
+                self.width(), self.height(),
+                vm, pm
+            )
+            
+            hit = GeometryUtils.intersect_ray_plane(origin, direction, self.ground_z)
+            
+            if hit is not None:
+                self.draw_end_pt = hit
+                self._update_ghost_box()
+                
+        elif self.state == DrawState.SETTING_HEIGHT:
+            # Update Height (Visual only)
+            # We map vertical mouse movement to Z height
+            # Simple heuristic: 100 pixels = 2 meters
+            # Ideally we track delta from mouseRelease, but absolute Y works for now
+            pass
+            # (Refinement: We can implement pixel-delta logic here if needed)
+        
+        super().mouseMoveEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        if self.state == DrawState.DRAGGING_BASE:
+            # transition into height mode
+            self.state = DrawState.SETTING_HEIGHT
+            
+            # setting a default height so that the box pops up immmediately
+            self.draw_height = 1.6
+            self._update_ghost_box()
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+    
+    def _update_ghost_box(self):
+        """Updates the GLBoxItem to match current drawing state."""
+        if self.draw_start_pt is None and self.draw_end_pt is None:
+            return
+        
+        p1 = self.draw_start_pt
+        p2 = self.draw_end_pt
+        
+        # calculate dimensions
+        dx = abs(p2[0] - p1[0])
+        dy = abs(p2[1] - p1[1])
+        dz = self.draw_height
+        
+        # caculate center, currently box item draws them from the center but translation needs to be done
+        min_x = min(p1[0], p2[0])
+        min_y = min(p1[1], p2[1])
+        min_z = self.ground_z
+        
+        self.ghost_box.setSize(dx, dy, dz)
+        self.ghost_box.resetTransform()
+        self.ghost_box.translate(min_x, min_y, min_z)
+        self.ghost_box.setVisible(True)
+        self.update()
+    
+    def _finalize_drawing(self):
+        p1 = self.draw_start_pt
+        p2 = self.draw_end_pt
+        
+        dx = abs(p2[0] - p1[0])
+        dy = abs(p2[1] - p1[1])
+        dz = self.draw_height
+        
+        cx = (p1[0] + p2[0]) / 2.0
+        cy = (p1[1] + p2[1]) / 2.0
+        cz = self.ground_z + (dz / 2.0)
+        
+        # min size check
+        if dx > 0.1 and dy > 0.1:
+            self.box_created.emit(cx, cy, cz, dx, dy, dz, 0.0)
+                
     def paintEvent(self, event):
         super().paintEvent(event)
         
@@ -77,7 +235,7 @@ class LidarVisualizer(BasePluginWidget):
         super().__init__(title="LiDAR 3D View")
         self._setup_ui()
         self.current_boxes = []
-        self.box_items = []
+        self.box_items = []         # Visual Items (Lines)
         self.debug_items = []
         self.current_points = None
 
@@ -86,17 +244,16 @@ class LidarVisualizer(BasePluginWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.view_widget = CustomGLWidget()
         self.view_widget.opts["distance"] = 20
+        self.view_widget.setWindowTitle("LiDAR Viewer")
 
         # grid
         grid = gl.GLGridItem()
+        grid.setSize(x=50, y=50, z=1)
         self.view_widget.addItem(grid)
 
         # Scatter Plot (The Point Cloud)
         self.scatter = gl.GLScatterPlotItem()
         self.view_widget.addItem(self.scatter)
-
-        # Bounding Box Container (We will add/remove line items here)
-        self.box_items = []
 
         layout.addWidget(self.view_widget)
 
@@ -183,9 +340,12 @@ class LidarVisualizer(BasePluginWidget):
 
             # create line item
             line_item = gl.GLLinePlotItem(
-                pos=pts, mode="lines", color=box.color, width=2, antialias=True
+                pos=pts, 
+                mode="lines", 
+                color=box.color, 
+                width=2, 
+                antialias=True
             )
-
             self.view_widget.addItem(line_item)
             self.box_items.append(line_item)
             
@@ -194,33 +354,3 @@ class LidarVisualizer(BasePluginWidget):
 
     def reset(self):
         self.scatter.setData(pos=np.zeros((0, 3)))
-
-    def draw_debug_lines(self, lines_list):
-        """Draws persistent debug rays."""
-        for item in self.debug_items:
-            self.view_widget.removeItem(item)
-        self.debug_items.clear()
-
-        if not lines_list:
-            return
-
-        pts = []
-        for line in lines_list:
-            pts.append(line[0])  # Start (Camera Origin)
-            pts.append(line[1])  # End (Frustum corner)
-
-        pts_arr = np.array(pts)
-
-        print(f"DEBUG: Drawing {len(lines_list)} lines.")
-        print(f"DEBUG: Start Point (Cam): {pts_arr[0]}")
-        print(f"DEBUG: End Point (Ray): {pts_arr[1]}")
-
-        line_item = gl.GLLinePlotItem(
-            pos=pts_arr,
-            mode="lines",
-            color=(1, 0, 0, 1),  # Bright Red
-            width=3,  # Thicker lines
-            antialias=True,
-        )
-        self.view_widget.addItem(line_item)
-        self.debug_items.append(line_item)

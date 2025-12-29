@@ -391,3 +391,81 @@ class GeometryUtils:
         pca_heading = (pca_heading + np.pi) % (2 * np.pi) - np.pi
         
         return pca_heading
+    
+    @staticmethod
+    def screen_to_ray(
+        mouse_x: int,
+        mouse_y: int,
+        screen_w: int, 
+        screen_h: int,
+        view_matrix: np.ndarray,
+        proj_matrix: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Convert 2D screen coordinates to a 3D Ray (origin, direction)
+
+        Args:
+            mouse_x (int): Pixel coordinates (Top-Left origin)
+            mouse_y (int): Pixel coordinates (Top-Left origin)
+            screen_w (int): Viewport dimension
+            screen_h (int): Viewport dimension
+            view_matrix (np.ndarray): (4, 4) View Matrix (World -> Camera)
+            proj_matix (np.ndarray): (4, 4) Projection Matrix (Camera -> Clip)
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: (3,) numpy array, (3,) normalized numpy array
+        """
+        # OpenGL NDC(Normalized Device Coordinates): x=[-1, 1], y=[-1, 1] (y is up)
+        ndc_x = (2.0 * mouse_x) / screen_w - 1.0
+        ndc_y = 1.0 - (2.0 * mouse_y) / screen_h
+        
+        # clip near plan and far plane
+        clip_near = np.array([ndc_x, ndc_y, -1.0, 1.0])
+        clip_far = np.array([ndc_x, ndc_y, 1.0, 1.0])
+        
+        try:
+            # We need to go from Clip Space -> World Space
+            mvp = proj_matrix @ view_matrix
+            inv_mvp = np.linalg.inv(mvp) 
+        except np.linalg.LinAlgError:
+            return np.zeros(3), np.array([0, 0, 1])
+        
+        # unproject
+        res_near = inv_mvp @ clip_near
+        res_far = inv_mvp @ clip_far
+        
+        # perspective divide
+        if res_near[3] != 0:
+            res_near /= res_near[3]
+        if res_far[3] != 0:
+            res_far /= res_far[3]
+            
+        # form ray
+        origin = res_near[:3]
+        end = res_far[:3]
+        
+        direction = end - origin
+        norm = np.linalg.norm(direction)
+        if norm > 1e-16:
+            direction /= norm
+            
+        return origin, direction
+    
+    @staticmethod
+    def intersect_ray_plane(ray_origin: np.ndarray, ray_dir: np.ndarray, plane_z: float = 0.0) -> np.ndarray:
+        """
+        Finds the intersection point of a ray and a horizontal plane at Z = plane_z.
+         Start + t * Dir = Target
+         RayZ + t * DirZ = PlaneZ
+         t = (PlaneZ - RayZ) / DirZ
+        """
+        
+        if abs(ray_dir[2]) < 1e-6:
+            return None # ray is parallel to the plane
+        
+        t = (plane_z - ray_origin[2]) / ray_dir[2]
+        
+        if t < 0:
+            return None # intersection is behind the camera
+        
+        return ray_origin + t * ray_dir
