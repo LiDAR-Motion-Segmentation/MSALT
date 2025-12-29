@@ -1,7 +1,9 @@
 from PyQt6.QtWidgets import QLabel
 from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPoint
 from PyQt6.QtGui import QPainter, QPen, QColor, QMouseEvent, QFont, QFontMetrics
+import logging
 
+logger = logging.getLogger(__name__)
 
 class DrawableLabel(QLabel):
     """
@@ -78,8 +80,8 @@ class DrawableLabel(QLabel):
                 real_h = int(screen_rect.height() * scale_y)
 
                 # Emit the signal
-                print(
-                    f"[STATUS]: Image Box Drawn: {real_x}, {real_y}, {real_w}x{real_h}"
+                logger.info(
+                    f"Image Box Drawn: {real_x}, {real_y}, {real_w}x{real_h}"
                 )
                 self.selection_finished.emit(real_x, real_y, real_w, real_h)
 
