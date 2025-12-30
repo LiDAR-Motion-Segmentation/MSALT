@@ -52,3 +52,25 @@ class DataController:
     
     def get_camera_ids(self):
         return self.loader.get_camera_ids() if self.loader else []
+    
+    def get_calibration(self, cam_id: str):
+        """
+        Returns {'intrinsic': np.array, 'extrinsic': np.array} 
+        or None if not found.
+        """
+        if not self.loader:
+            return None
+        
+        if not hasattr(self.loader, 'calibration'):
+            return None
+        
+        calib_obj = self.loader.calibration
+        if callable(calib_obj):
+            calib_data = calib_obj()
+        else:
+            calib_data = calib_obj
+            
+        if not isinstance(calib_data, dict):
+            return None
+
+        return calib_data.get(cam_id)
