@@ -260,14 +260,20 @@ class LidarVisualizer(BasePluginWidget):
     def on_frame_update(self, data: FrameData) -> None:
         if data.point_cloud is not None:
             self.current_points = data.point_cloud  # (N, 3)
-
-            # Color Map Logic (Height Based)
-            z = self.current_points[:, 2]
-            colors = np.ones((self.current_points.shape[0], 4))
-            colors[:, 0] = np.clip((z + 2) / 5, 0, 1)  # R
-            colors[:, 1] = 0.5  # G
-
-            self.scatter.setData(pos=self.current_points, color=colors, size=2)
+            
+            if not self.view_widget.overlay_boxes:
+                self._draw_points_default()
+            
+    def _draw_points_default(self):
+        """Standard Z-height gradient."""
+        if self.current_points is None: 
+            return
+        
+        z = self.current_points[:, 2]
+        colors = np.ones((len(z), 4))
+        colors[:, 0] = np.clip((z + 2.0) / 5.0, 0, 1) 
+        colors[:, 1] = 0.5
+        self.scatter.setData(pos=self.current_points, color=colors, size=2)
 
     def update_boxes(self, boxes: list[BoundingBox3D]):
         self.view_widget.overlay_boxes = boxes
@@ -280,6 +286,7 @@ class LidarVisualizer(BasePluginWidget):
         # Re-Color Point Cloud (Highlight Selected Points)
         if self.current_points is not None:
             # Reset to default colors first
+            points = self.current_points
             z = self.current_points[:, 2]
             colors = np.ones((len(z), 4))
             colors[:, 0] = np.clip((z + 2) / 5, 0, 1)
@@ -295,16 +302,18 @@ class LidarVisualizer(BasePluginWidget):
             default_color = [0.0, 1.0, 0.0, 1.0]  # Green
 
             for box in boxes:
-                if box.point_indices is not None:
-                    # Color these points RED
-                    lbl = box.label.strip() if box.label else "unknown"
-                    target_color = class_colors.get(lbl, default_color)
+                # Color these points RED
+                lbl = box.label.strip() if box.label else "unknown"
+                target_color = class_colors.get(lbl, default_color)
 
-                    # Apply to the specific indices
-                    colors[box.point_indices] = target_color
+                indices = GeometryUtils.get_points_in_box(points, box)
+                    
+                if len(indices) > 0:
+                    colors[indices] = target_color
+                    # box.color = target_color
 
             # Update the scatter plot
-            self.scatter.setData(pos=self.current_points, color=colors, size=2)
+            self.scatter.setData(pos=points, color=colors, size=2)
 
         # Draw new box lines
         # Connectivity for a cube wireframe (lines between corner indices)
