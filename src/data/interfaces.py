@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 from .structures import FrameData, SensorConfig
+import numpy as np
 
 class BaseDatasetLoader(ABC):
     def __init__(self, config: SensorConfig) -> None:
@@ -21,4 +22,8 @@ class BaseDatasetLoader(ABC):
     
     @abstractmethod
     def get_camera_ids(self) -> List[str]:
+        pass
+    
+    @abstractmethod
+    def calibration(self) -> np.ndarray:
         pass
