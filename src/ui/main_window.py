@@ -180,7 +180,7 @@ class MainWindow(QMainWindow):
 
     def load_frame(self, idx: int):
         self.current_frame_idx = idx
-        self.current_frame_data = self.data_controller.get_frame(idx)
+        self.current_frame_data = self.data_controller.get(idx)
         boxes = self.annotation_manager.get_boxes(idx)
         
         # Explicitly deselect all boxes when entering a new frame.
@@ -379,7 +379,7 @@ class MainWindow(QMainWindow):
             return
 
         # Get Data for Next Frame (To calculate new points/2D box)
-        next_data = self.data_controller.get_frame(next_idx)
+        next_data = self.data_controller.get(next_idx)
 
         count = 0
         for old_box in boxes_to_copy:

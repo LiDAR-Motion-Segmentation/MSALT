@@ -45,10 +45,10 @@ class DataController:
     def get_total_frames(self) -> int:
         return len(self.loader) if self.loader else 0
     
-    def get_frame(self, idx: int) -> FrameData:
+    def get(self, idx: int) -> FrameData:
         if not self.loader:
             raise RuntimeError("Loader not initialized")
-        return self.loader.get_frame(idx)
+        return self.loader.get(idx)
     
     def get_camera_ids(self):
         return self.loader.get_camera_ids() if self.loader else []

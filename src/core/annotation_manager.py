@@ -191,7 +191,7 @@ class AnnotationManager:
             return 0
         
         for f_idx in range(start_frame + 1, end_frame + 1):
-            frame_data = data_controller.get_frame(f_idx)
+            frame_data = data_controller.get(f_idx)
             if not frame_data or frame_data.point_cloud is None:
                 break
             

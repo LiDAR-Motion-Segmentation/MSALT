@@ -99,7 +99,7 @@ class RealSenseLoader(BaseDatasetLoader):
     def get_camera_ids(self) -> List[str]:
         return list(self._cam_files.keys())
     
-    def get_frame(self, idx: int) -> FrameData:
+    def get(self, idx: int) -> FrameData:
         if idx < 0 or idx >= len(self):
             raise IndexError("Frame is out of index bounds")
         
@@ -125,3 +125,11 @@ class RealSenseLoader(BaseDatasetLoader):
             images=images_dict,
             metadata={'calibration': self._calibration}
         )
+        
+    @property
+    def calibration(self):
+        """
+        Implements the abstract property from BaseDatasetLoader.
+        Returns the dictionary of camera calibrations.
+        """
+        return self._calibration
