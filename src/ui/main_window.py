@@ -444,7 +444,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("No box selected to delete.", 2000)
             return
         
-        # # Perform Delete
+        # Perform Delete
         cmd = BulkDeleteCommand(
             self.annotation_manager, 
             self.current_frame_idx, 
@@ -459,28 +459,58 @@ class MainWindow(QMainWindow):
         
     def interpolate_selection(self):
         """
-        Fills the gap between the PREVIOUS appearance of the selected box
-        and the CURRENT frame.
+        Action for the 'Interpolate' button.
         """
         current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
         selected_boxes = [b for b in current_boxes if b.selected]
         
         if not selected_boxes:
-            self.statusBar().showMessage("Select a box to interpolate.", 2000)
+            self.statusBar().showMessage("Select a box to interpolate/track.", 2000)
             return
         
         total_filed = 0
+        TRACK_HORIZON = 10
+        start_frame = self.current_frame_idx
+        end_frame = min(start_frame + TRACK_HORIZON, self.data_controller.get_total_frames() - 1)
         for box in selected_boxes:
-            count = self.annotation_manager.run_interpolation(
-                box.track_id,
-                self.current_frame_idx
+            self.statusBar().showMessage(f"Tracking ID {box.track_id}...")
+            count = self.annotation_manager.run_smart_interpolation(
+                box.track_id, 
+                self.current_frame_idx, 
+                end_frame,
+                self.data_controller,
+                self.seg_engine
             )
             total_filed += count
             
         if total_filed > 0:
-            self.statusBar().showMessage(f"Interpolated {total_filed} frames.", 3000)
+            self.statusBar().showMessage(f"Saving {total_filed} frames to disk...", 3000)
+            
+            # Retrieve output paths from Config, matching save_current_work()
+            base_out = Path(self.data_controller.cfg.output.dir)
+            boxes_dir = base_out / "3d"
+            meta_dir = base_out / "metadata"
+            
+            # Save Start Frame (Current)
+            self.save_current_work()
+            
+            # Save Future Frames (Tracked)
+            for f_idx in range(start_frame + 1, end_frame + 1):
+                filename = f"{f_idx:06d}.json"
+                
+                # Force save from AnnotationManager
+                self.annotation_manager.save_frame(
+                    f_idx, 
+                    boxes_dir, 
+                    meta_dir, 
+                    filename
+                )
+                logger.info(f"Auto-saved tracked frame: {filename}")
+                
+            self.load_frame(self.current_frame_idx)
+            self.statusBar().showMessage(f"Tracking Complete. Jumped to Frame {end_frame}.", 4000)
         else:
-            self.statusBar().showMessage("No previous frame found to interpolate from.", 3000)
+            self.statusBar().showMessage("Tracking failed. No new boxes created.", 3000)
             
     def undo_action(self):
         msg = self.history.undo()
