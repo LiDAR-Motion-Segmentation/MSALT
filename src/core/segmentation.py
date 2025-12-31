@@ -51,17 +51,32 @@ class SegmentationEngine:
         x, y, w, h = bbox
         box_xyxy = [x, y, x + w, y + h]
 
+        if self.model is None:
+            return None
+        
         # Run inference using the config parameters
-        results = self.model(
-            image,
-            bboxes=[box_xyxy],
-            verbose=False,
-            device=self.device,
-            conf=self.cfg.segmentation.conf_threshold,
-        )
+        try:
+            results = self.model(
+                image,
+                bboxes=[box_xyxy],
+                verbose=False,
+                device=self.device,
+                conf=self.cfg.segmentation.conf_threshold,
+            )
+            
+            # Check if we got any results
+            if not results:
+                return None
+                
+            # Check if we got any masks
+            if results[0].masks is None or len(results[0].masks.data) == 0:
+                return None
 
-        if results and results[0].masks is not None:
+            # Usually we take the first mask (highest confidence)
             mask_tensor = results[0].masks.data[0]
             return mask_tensor.cpu().numpy().astype(bool)
 
-        return np.zeros(image.shape[:2], dtype=bool)
+        except Exception as e:
+            # Catch inference errors safely
+            print(f"SAM Inference Error: {e}")
+            return None

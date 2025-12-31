@@ -17,7 +17,7 @@ class BaseDatasetLoader(ABC):
         pass
     
     @abstractmethod
-    def get_frame(self, idx: int) -> FrameData:
+    def get(self, idx: int) -> FrameData:
         pass
     
     @abstractmethod
