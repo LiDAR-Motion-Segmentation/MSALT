@@ -2,7 +2,9 @@ import numpy as np
 import open3d as o3d
 from sklearn.cluster import DBSCAN
 from scipy.spatial.transform import Rotation as R
-
+from src.core.objects import BoundingBox3D
+from copy import deepcopy
+from typing import Optional
 
 class GeometryUtils:
     @staticmethod
@@ -21,11 +23,21 @@ class GeometryUtils:
             uv: (N, 2) Projected pixel coordinates
             valid: (N,) Boolean mask (True if point is in front of camera)
         """
+        if len(xyz) == 0:
+            return np.zeros((0, 2)), np.zeros(0, dtype=bool)
+        
+        # Add homogenous coordinates
         pts_h = np.hstack([xyz, np.ones((xyz.shape[0], 1))])
-        T_inv = np.linalg.inv(camera_pose)
-        pts_cam = (T_inv @ pts_h.T).T[:, :3]
+        
+        # World -> Camera (Inverse of Pose)
+        T_world_to_cam = np.linalg.inv(camera_pose)
+        pts_cam = (T_world_to_cam @ pts_h.T).T[:, :3]
+        
+        # Filter Z > 0
         z = pts_cam[:, 2]
-        valid = z > 0
+        
+        # Small clip plane
+        valid = z > 0 
         pts_cam_valid = pts_cam[valid]
         proj = (intr @ pts_cam_valid.T).T  # (M, 3)
 
@@ -209,15 +221,14 @@ class GeometryUtils:
         Selects 3D points that project onto the 'True' pixels of a 2D mask.
         Implements your 'mask_point_indices' logic.
         """
-        # 1. Project ALL points to image plane
+        # Project ALL points to image plane
         uv, valid = GeometryUtils.project_lidar_to_image(points, camera_pose, intr)
-
         h, w = mask.shape
 
-        # 2. Convert to integer pixels
+        # Convert to integer pixels
         pixel_uv = np.round(uv).astype(int)
 
-        # 3. Check Image Bounds (Vectorized)
+        # Check Image Bounds (Vectorized)
         # We only check points that were already valid (z > 0)
         in_img_bounds = (
             (pixel_uv[:, 0] >= 0)
@@ -229,7 +240,7 @@ class GeometryUtils:
         # Combine: Must be in front of cam AND inside image frame
         final_candidates_mask = valid & in_img_bounds
 
-        # 4. Check Mask Value
+        # Check Mask Value
         # Extract u,v indices for candidate points
         valid_u = pixel_uv[final_candidates_mask, 0]
         valid_v = pixel_uv[final_candidates_mask, 1]
@@ -238,7 +249,7 @@ class GeometryUtils:
         # mask[v, u] because numpy is (row, col)
         is_in_mask = mask[valid_v, valid_u] == 1
 
-        # 5. Create Final 3D Mask
+        # Create Final 3D Mask
         # Start with all False
         mask_3d = np.zeros(len(points), dtype=bool)
         # Only set True for the candidates that passed the mask check
@@ -277,9 +288,9 @@ class GeometryUtils:
     @staticmethod
     def project_box_to_image(
         box, camera_pose: np.ndarray, intr: np.ndarray, image_shape
-    ) -> dict:
+    ) -> Optional[list[int]]:
         """
-        Projects a 3D Box onto the camera image to find the new 2D Bounding Box (Cyan Box).
+        Projects a 3D Box to a 2D Bounding Rect [x, y, w, h] for SAM prompting.
         """
         # Get 8 Corners of the 3D Box
         corners_3d = box.get_corners()
@@ -291,23 +302,25 @@ class GeometryUtils:
         if np.sum(valid) < 4:
             return None
 
-        uv_valid = uv[valid]
-
-        # Find the Rectangle that covers these pixels
-        min_x, max_x = np.min(uv_valid[:, 0]), np.max(uv_valid[:, 0])
-        min_y, max_y = np.min(uv_valid[:, 1]), np.max(uv_valid[:, 1])
+        u_valid = uv[valid, 0]
+        v_valid = uv[valid, 1]
 
         # Clip to Image Dimensions
         h, w = image_shape[:2]
-        x = int(max(0, min_x))
-        y = int(max(0, min_y))
-        w_rect = int(min(w, max_x) - x)
-        h_rect = int(min(h, max_y) - y)
+        
+        # Clamp to image
+        min_x = np.clip(np.min(u_valid), 0, w)
+        max_x = np.clip(np.max(u_valid), 0, w)
+        min_y = np.clip(np.min(v_valid), 0, h)
+        max_y = np.clip(np.max(v_valid), 0, h)
 
-        if w_rect <= 0 or h_rect <= 0:
+        width = max_x - min_x
+        height = max_y - min_y
+
+        if width <= 5 or height <= 5:
             return None
 
-        return {"rect": [x, y, w_rect, h_rect]}
+        return [int(min_x), int(min_y), int(width), int(height)]
 
     @staticmethod
     def interpolate_box(box_start, box_end, t: float):
@@ -469,3 +482,62 @@ class GeometryUtils:
             return None # intersection is behind the camera
         
         return ray_origin + t * ray_dir
+    
+    @staticmethod
+    def fit_box_with_pca(points: np.ndarray, previous_box: BoundingBox3D) -> BoundingBox3D:
+        """
+        Refines a box using DBSCAN (outlier removal) + PCA (orientation).
+        """
+        if len(points) < 5:
+            return None
+        
+        clustering = DBSCAN(eps=0.5, min_samples=4).fit(points)
+        all_labels = clustering.labels_
+        unique_labels = set(all_labels) - {-1}
+        if not unique_labels:
+            return None
+        
+        best_cluster = max(unique_labels, key=lambda cluster_id: np.sum(all_labels == cluster_id))
+        inliers = points[all_labels == best_cluster]
+        
+        if len(inliers) < 5: 
+            return None
+        
+        # PCA
+        xy = inliers[:, :2]
+        mean = np.mean(xy, axis=0)
+        cov = np.cov((xy - mean).T)
+        evals, evecs = np.linalg.eig(cov)
+        major_axis = evecs[:, np.argmax(evals)]
+        pca_heading = np.arctan2(major_axis[1], major_axis[0])
+        
+        # resolving ambiguity
+        diff = pca_heading - previous_box.heading
+        diff = (diff + np.pi) % (2 * np.pi) - np.pi
+        if abs(diff) > (np.pi / 2): 
+            pca_heading += np.pi
+        
+        new_heading = (pca_heading + np.pi) % (2 * np.pi) - np.pi
+        
+        # Fit Dimensions (Oriented)
+        c, s = np.cos(-new_heading), np.sin(-new_heading)
+        rot_mat = np.array([[c, -s], [s, c]])
+        proj_xy = inliers[:, :2] @ rot_mat.T
+        
+        min_xy, max_xy = np.min(proj_xy, axis=0), np.max(proj_xy, axis=0)
+        min_z, max_z = np.min(inliers[:, 2]), np.max(inliers[:, 2])
+
+        new_dx = max_xy[0] - min_xy[0]
+        new_dy = max_xy[1] - min_xy[1]
+        new_dz = max_z - min_z
+
+        center_pca = (min_xy + max_xy) / 2.0
+        center_world = center_pca @ np.linalg.inv(rot_mat).T
+        
+        new_box = deepcopy(previous_box)
+        new_box.x, new_box.y = center_world[0], center_world[1]
+        new_box.z = min_z + (new_dz/2)
+        new_box.dx, new_box.dy, new_box.dz = new_dx, new_dy, new_dz
+        new_box.heading = new_heading
+        
+        return new_box
