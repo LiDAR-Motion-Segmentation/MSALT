@@ -12,6 +12,7 @@ from src.ui.playback_widget import PlaybackWidget
 from src.ui.components.annotation_list import AnnotationListWidget
 from src.ui.components.inspector_view import InspectorWidget
 from src.ui.components.automation_panel import AutomationPanel
+from src.ui.components.batch_view import BatchGridWindow
 
 from src.core.annotation_manager import AnnotationManager
 from src.core.objects import BoundingBox3D
@@ -108,6 +109,11 @@ class MainWindow(QMainWindow):
         )
         self.inspector.box_changed.connect(self.on_box_edited)
         
+        # Initialize the Grid Window (Hidden by default)
+        self.batch_grid_window = BatchGridWindow(self.data_controller, self.annotation_manager)
+        self.batch_grid_window.request_jump.connect(self.load_frame)
+        self.automation_panel.grid_view_requested.connect(self.open_grid_view)
+        
         # Save (Ctrl+S)
         save_action = QAction("Save Annotations", self)
         save_action.setShortcut(QKeySequence("Ctrl+S"))
@@ -151,6 +157,10 @@ class MainWindow(QMainWindow):
         self.shortcut_refine = QShortcut(QKeySequence("R"), self)
         self.shortcut_refine.activated.connect(self.refine_selection)
         
+        # Batch view (B)
+        self.shortcut_batch = QShortcut(QKeySequence("B"), self)
+        self.shortcut_batch.activated.connect(self.open_grid_view)
+        
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
 
@@ -177,6 +187,24 @@ class MainWindow(QMainWindow):
         # Wiring the Playback -> Controller -> UI.
         self.playback.frame_changed.connect(self.load_frame)
         self.cam_widget.box_drawn.connect(self.handle_annotation)
+        
+    def open_grid_view(self):
+        """Opens the Grid Window for the currently selected track."""
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        selected = [b for b in current_boxes if b.selected]
+        
+        if not selected:
+            self.statusBar().showMessage("Select a box to view in Grid.", 2000)
+            return
+            
+        track_id = selected[0].track_id
+        
+        # Show Window
+        self.batch_grid_window.show()
+        self.batch_grid_window.raise_() # Bring to front
+        
+        # Load Data (Center on current frame, show 16 frames context)
+        self.batch_grid_window.load_track(track_id, self.current_frame_idx, window_size=18)
 
     def load_frame(self, idx: int):
         self.current_frame_idx = idx
@@ -208,6 +236,10 @@ class MainWindow(QMainWindow):
         self.lidar_widget.on_frame_update(self.current_frame_data)
         self.lidar_widget.update_boxes(boxes)
         self.list_panel.update_list(boxes)
+        if self.batch_grid_window.isVisible():
+             # Only reload if we moved significantly? 
+             # Or just refresh highligts. For now, let's keep it manual or auto-refresh.
+             pass
 
     def on_box_selected(self, box):
         # Highlight the box in 3D view when clicked in list.
