@@ -204,7 +204,7 @@ class MainWindow(QMainWindow):
         self.batch_grid_window.raise_() # Bring to front
         
         # Load Data (Center on current frame, show 16 frames context)
-        self.batch_grid_window.load_track(track_id, self.current_frame_idx, window_size=16)
+        self.batch_grid_window.load_track(track_id, self.current_frame_idx, window_size=18)
 
     def load_frame(self, idx: int):
         self.current_frame_idx = idx
