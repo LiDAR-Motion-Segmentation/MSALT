@@ -31,7 +31,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 uv run main.py
 ```
-![alt text](./assets/ui_v9.png)
+![alt text](./assets/ui_v10.png)
 
 ## Model weights
 - Download the SAM 2 checkpoints and place them in the checkpoints/ directory (create if missing).
@@ -53,12 +53,15 @@ uv run main.py
 | **3D View** | `Left Drag` / `Right Drag` | Rotate / Pan Camera |
 | **3D View** | `Scroll` | Zoom In / Out |
 | **3D Box allignment** | `R` | PCA trigger for correct 3D box allignment |
+| **Batch View** | `B` | Batch mode of (4x4) set of frames |
 
 ![alt text](./assets/UI_action.gif)
 
 <!-- <video src="./assets/annotation_video_box_editing.mp4" controls title="A short video demonstration" width="600">
 </video> -->
 
+## Batch mode
+![alt text](./assets/batch_mode_v1.png)
 
 ## Data structure
 - MSALT expects your data to be organized as follows. Define the paths in `config/config.yaml`
@@ -113,6 +116,7 @@ uv run main.py
 │       ├── components
 |       |   ├── annotation_list.py
 |       |   ├── automation_panel.py
+|       |   ├── batch_view.py
 │       │   ├── camera_view.py
 │       │   ├── drawable_label.py
 |       |   ├── inspector_view.py
