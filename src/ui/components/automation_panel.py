@@ -5,6 +5,7 @@ from PyQt6.QtCore import pyqtSignal, Qt
 class AutomationPanel(QWidget):
     propagate_requested = pyqtSignal()
     interpolate_requested = pyqtSignal()
+    grid_view_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -65,6 +66,25 @@ class AutomationPanel(QWidget):
 
         layout.addStretch()
         self.setLayout(layout)
+        
+        self.btn_grid = QPushButton("Batch View (B)")
+        self.btn_grid.clicked.connect(self.grid_view_requested.emit)
+        self.btn_grid.setStyleSheet("""
+            QPushButton {
+                background-color: #FFD700; /* Gold/Yellow */
+                color: black;
+                font-weight: bold;
+                border-radius: 4px;
+                padding: 6px;
+            }
+            QPushButton:hover {
+                background-color: #FFC107; /* Darker Yellow on hover */
+            }
+            QPushButton:pressed {
+                background-color: #FFB300;
+            }
+        """)
+        layout.addWidget(self.btn_grid)
 
     def on_frame_update(self, data):
         """
