@@ -3,6 +3,7 @@ import hydra
 from pathlib import Path
 from omegaconf import DictConfig, OmegaConf
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt
 from src.ui.main_window import MainWindow
 from src.data.data_controller import DataController
 import logging
@@ -16,6 +17,7 @@ logger = logging.getLogger("MSALT_Entry")
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg: DictConfig):
     print(f"Active Configuration:\n{OmegaConf.to_yaml(cfg)}")
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
     app.setApplicationName(cfg.app.window_title)
 
