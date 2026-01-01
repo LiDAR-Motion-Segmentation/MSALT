@@ -102,7 +102,7 @@ class BatchGridWindow(QWidget):
         self.scroll.setWidget(self.grid_container)
         self.main_layout.addWidget(self.scroll)
         
-    def load_track(self, track_id, center_frame, window_size=12):
+    def load_track(self, track_id, start_frame_idx, window_size=12):
         """
         Loads crops for track_id from (center - window/2) to (center + window/2).
         """
@@ -120,14 +120,14 @@ class BatchGridWindow(QWidget):
             return
         
         # Define Range
-        start = max(0, center_frame - (window_size // 2))
-        end = min(self.data_ctrl.get_total_frames(), center_frame + (window_size // 2))
+        start = start_frame_idx
+        end = min(self.data_ctrl.get_total_frames(), start + window_size)
         
-        self.header.setText(f"Track ID {track_id} | Frames {start} - {end}")
+        self.header.setText(f"Track ID {track_id} | Checking Interpolation: Frames {start} - {end - 1}")
         
         # Columns for grid (e.g., 4 columns)
         # might want 5 in future lets see
-        COLS = 4
+        COLS = 6
         
         for i, f_idx in enumerate(range(start, end)):
             boxes = self.anno_mgr.get_boxes(f_idx)
@@ -174,7 +174,7 @@ class BatchGridWindow(QWidget):
             vbox.addWidget(lbl_info)
             
             # Highlight Current Frame
-            if f_idx == center_frame:
+            if f_idx == start_frame_idx:
                 lbl_info.setStyleSheet("background-color: #FFD700; color: black; font-weight: bold;")
 
             row, col = divmod(i, COLS)
