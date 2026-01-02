@@ -26,7 +26,6 @@ from src.core.commands import (
 
 import logging
 import numpy as np
-from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
