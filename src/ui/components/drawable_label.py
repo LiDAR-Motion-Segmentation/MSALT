@@ -2,6 +2,7 @@ from PyQt6.QtWidgets import QLabel
 from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPoint
 from PyQt6.QtGui import QPainter, QPen, QColor, QMouseEvent, QFont, QFontMetrics
 import logging
+from src.core.geometry import GeometryUtils
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +30,25 @@ class DrawableLabel(QLabel):
 
         # List of [x, y, w, h] in ORIGINAL coordinates
         self.static_rects = []
+        
+        # Live Projection Data
+        self.current_boxes_3d = []
+        self.intrinsic = None
+        self.extrinsic = None
 
     def set_original_resolution(self, w: int, h: int) -> None:
         self.orig_width = w
         self.orig_height = h
 
+    def set_projection_data(self, boxes, intrinsic, extrinsic):
+        """
+        Updates the 3D data used for live projection.
+        """
+        self.current_boxes_3d = boxes
+        self.intrinsic = intrinsic
+        self.extrinsic = extrinsic
+        self.update()  # Trigger repaint
+    
     def set_static_rects(self, rects_data):
         """
         Receives list of dicts: [{'rect': [x,y,w,h], 'id': 1, 'label': 'person'}, ...]
@@ -63,11 +78,10 @@ class DrawableLabel(QLabel):
 
             # Convert to Original Image Coordinates
             if self.pixmap() and not screen_rect.isEmpty():
-                # calulate scale factors
+                # Calculate scale to map back to original image resolution
                 disp_w = self.width()
                 disp_h = self.height()
 
-                # Note: QLabel usually centers the image if scaled.
                 # For simplicity, we assume the pixmap fills the label (ScaledContents=True)
                 # or we calculate the offset.
 
@@ -92,6 +106,11 @@ class DrawableLabel(QLabel):
     def paintEvent(self, event):
         # draw the image
         super().paintEvent(event)
+        
+        # If no calibration, we can't project
+        if self.intrinsic is None or self.extrinsic is None:
+            return
+        
         painter = QPainter(self)
 
         # Setup Font
@@ -99,53 +118,61 @@ class DrawableLabel(QLabel):
         painter.setFont(font)
         fm = QFontMetrics(font)
 
-        # Calculate Scale
+        # Calculate Scale (Widget Size vs Original Image Size)
         scale_x = self.width() / self.orig_width
         scale_y = self.height() / self.orig_height
 
-        # Draw STATIC Boxes (The ones saved) - Cyan/Blue
-        pen_static = QPen(QColor(0, 255, 255), 2)  # Cyan
-        painter.setPen(pen_static)
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-
-        for item in self.static_rects:
+        for box in self.current_boxes_3d:
             # Handle both legacy (list) and new (dict) formats
-            if isinstance(item, list):
-                # Fallback for old code if needed
-                rx, ry, rw, rh = item
-                label_text = ""
-            else:
-                rx, ry, rw, rh = item["rect"]
-                obj_id = item.get("id", "?")
-                obj_lbl = item.get("label", "unknown")
-                label_text = f"{obj_id}: {obj_lbl}"
+            rect_2d = GeometryUtils.project_box_to_image(
+                box, 
+                self.extrinsic, 
+                self.intrinsic, 
+                (self.orig_height, self.orig_width)
+            )
+            
+            if not rect_2d:
+                continue
+            
+            rx, ry, rw, rh = rect_2d
 
             # Scale back to screen coords
             sx = int(rx * scale_x)
             sy = int(ry * scale_y)
             sw = int(rw * scale_x)
             sh = int(rh * scale_y)
+            
+            # Default Green, Yellow if selected
+            base_color = QColor(0, 255, 0)
+            if box.selected:
+                base_color = QColor(255, 255, 0) # Yellow
+            elif box.label == "moving_people":
+                base_color = QColor(255, 0, 0) # Red
+            elif box.label == "static_car":
+                base_color = QColor(0, 150, 255) # Blue
 
             # Draw Box
+            pen = QPen(base_color, 2)
+            painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(QColor(0, 255, 255), 2))
             painter.drawRect(sx, sy, sw, sh)
 
+            # Draw label
+            label_text = f"{box.track_id}: {box.label}"
+            
             # Draw text overlay
-            if label_text:
-                text_w = fm.horizontalAdvance(label_text) + 10
-                text_h = fm.height() + 4
+            text_w = fm.horizontalAdvance(label_text) + 10
+            text_h = fm.height() + 4
+            text_y = sy - text_h if sy - text_h > 0 else sy
 
-                # Draw tiny background for text (so it's readable)
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QColor(0, 0, 0, 150))  # Semi-transparent black
-                # Position text above the box (or inside if at top edge)
-                text_y = sy - text_h if sy - text_h > 0 else sy
-                painter.drawRect(sx, text_y, text_w, text_h)
+            # Draw tiny background for text (so it's readable)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(0, 0, 0, 150))  # Semi-transparent black
+            painter.drawRect(sx, text_y, text_w, text_h)
 
-                # Draw Text
-                painter.setPen(QColor(255, 255, 255))  # White text
-                painter.drawText(sx + 5, text_y + fm.ascent() + 2, label_text)
+            # Draw Text
+            painter.setPen(QColor(255, 255, 255))  # White text
+            painter.drawText(sx + 5, text_y + fm.ascent() + 2, label_text)
 
         # Draw ACTIVE Rubberband (The one you are dragging) - Green
         if self.current_rect and self.is_drawing:

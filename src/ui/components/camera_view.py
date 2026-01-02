@@ -7,7 +7,7 @@ from PyQt6.QtGui import QImage, QPixmap
 from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
 from src.ui.components.drawable_label import DrawableLabel
-
+from src.core.objects import BoundingBox3D
 
 class CameraStripWidget(BasePluginWidget):
 
@@ -77,16 +77,19 @@ class CameraStripWidget(BasePluginWidget):
             lbl.clear()
             lbl.setText("No Data")
 
-    def update_2d_boxes(self, boxes_map: Dict[str, List[list]]):
+    def update_3d_projections(self, boxes: List[BoundingBox3D], calibration_dict: dict):
         """
-        Args:
-            boxes_map: {'CAM_1': [[x,y,w,h], ...], 'CAM_2': ...}
+        Passes 3D boxes and calibration to each camera label for live projection.
         """
-        # Clear all first
-        for lbl in self.image_labels.values():
-            lbl.set_static_rects([])
-
-        # Set new ones
-        for cam_id, rects in boxes_map.items():
-            if cam_id in self.image_labels:
-                self.image_labels[cam_id].set_static_rects(rects)
+        if not calibration_dict:
+            return
+        
+        for cam_id, label_widget in self.image_labels.items():
+            if cam_id in calibration_dict:
+                calib = calibration_dict[cam_id]
+                
+                label_widget.set_projection_data(
+                    boxes,
+                    calib.get('intrinsic'),
+                    calib.get('extrinsic')
+                )         

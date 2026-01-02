@@ -212,33 +212,26 @@ class MainWindow(QMainWindow):
         boxes = self.annotation_manager.get_boxes(idx)
         
         # Explicitly deselect all boxes when entering a new frame.
-        # This prevents the "Yellow Box" from persisting visually when it shouldn't.
         for b in boxes:
             b.selected = False
         
-        boxes_2d_map = defaultdict(list)
-
-        # prepare 2D Box Map for Camera View
-        for box in boxes:
-            if box.source_2d:
-                cam_id = box.source_2d["cam_id"]
-                rect = box.source_2d["rect"]
-                boxes_2d_map[cam_id].append(
-                    {"rect": rect, "id": box.track_id, "label": box.label}
-                )
 
         # update for plugins
         for plugin in self.plugins:
             plugin.on_frame_update(self.current_frame_data)
             
-
-        self.cam_widget.update_2d_boxes(boxes_2d_map)
         self.lidar_widget.on_frame_update(self.current_frame_data)
         self.lidar_widget.update_boxes(boxes)
+        
+        # Pass the FULL list of 3D boxes and the calibration dict
+        if self.current_frame_data.metadata and "calibration" in self.current_frame_data.metadata:
+            calib = self.current_frame_data.metadata["calibration"]
+            self.cam_widget.update_3d_projections(boxes, calib)
+            
         self.list_panel.update_list(boxes)
+        
+        # Update Grid if open
         if self.batch_grid_window.isVisible():
-             # Only reload if we moved significantly? 
-             # Or just refresh highligts. For now, let's keep it manual or auto-refresh.
              pass
 
     def on_box_selected(self, box):
@@ -258,6 +251,7 @@ class MainWindow(QMainWindow):
         self.lidar_widget.update_boxes(current_boxes)
         self.list_panel.update_list(current_boxes)
         self.save_current_work()
+        self.refresh_views_only()
 
     def on_box_deleted(self, box):
         # Remove box from manager and refresh.
@@ -629,3 +623,18 @@ class MainWindow(QMainWindow):
         
         # switch to inspector for fine-tuning
         self.inspector.set_box(new_box)
+        
+    def refresh_views_only(self):
+        """Refreshes overlays without reloading heavy PCD data."""
+        boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        
+        # update LiDAR
+        self.lidar_widget.update_boxes(boxes)
+        
+        # update Cameras
+        if self.current_frame_data:
+            calib = self.current_frame_data.metadata.get("calibration", {})
+            self.cam_widget.update_3d_projections(boxes, calib)
+            
+        # update List
+        self.list_panel.update_list(boxes)
