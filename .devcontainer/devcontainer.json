@@ -1,0 +1,41 @@
+{
+    "name": "MSALT Dev Container",
+    "build": {
+        "dockerfile": "../Docker/Dockerfile",
+        "context": "..",
+        "args": {
+            "USER_ID": "1000",
+            "GROUP_ID": "1000"
+        }
+    },
+    "remoteUser": "msalt-user",
+    
+    "runArgs": [
+        "--gpus", "all",
+        "--net=host",               
+        "-e", "DISPLAY=${env:DISPLAY}", 
+        "--privileged"              
+    ],
+
+    "mounts": [
+        "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind",
+        "source=/home/soumoroy/Downloads/MCMPT_output_nice_op,target=/app/data,type=bind",
+        "source=/home/soumoroy/SALT/SALT_outputs_annotations,target=/app/annotations,type=bind"
+    ],
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "njpwerner.autodocstring",
+                "charliermarsh.ruff" 
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/app/.venv/bin/python"
+            }
+        }
+    },
+
+    "postCreateCommand": "uv sync --frozen"
+}
