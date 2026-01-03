@@ -10,7 +10,23 @@ RUN apt-get update && apt-get install -y \
     libx11-xcb1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
     libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 \
     libxcb-cursor0 \
+    libxcb-cursor-dev \
     libxkbcommon-x11-0 \
+    libxcb-xinerama0 \
+    libxcb-xinerama0-dev \
+    libxcb-xfixes0 \
+    libxcb-xfixes0-dev \
+    libxcb-xkb1 \
+    libxcb-xkb-dev \
+    libxcb-keysyms1 \
+    libxcb-keysyms1-dev \
+    libxcb-icccm4 \
+    libxcb-icccm4-dev \
+    libxcb-image0 \
+    libxcb-render-util0 \
+    libxcb-ewmh2 \
+    libegl1 \
+    libopengl0 \
     libdbus-1-3 \
     && rm -rf /var/lib/apt/lists/*
 
