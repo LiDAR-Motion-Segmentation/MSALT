@@ -139,3 +139,64 @@ uv run ruff check . --fix
 # Run the test suite
 uv run pytest 
 ```
+
+## Docker (Devcontainer)
+### Prerequisites
+
+- **Ubuntu** (tested on 22.04)
+- **VSCode**
+- **Remote Development Extension by Microsoft** (Inside VSCode)
+- **Docker Installation**
+  ```bash
+  # Install Docker using convenience script
+  curl -fsSL https://get.docker.com -o get-docker.sh
+  sudo sh ./get-docker.sh
+
+  # Post-install configuration
+  sudo groupadd docker
+  sudo usermod -aG docker $USER
+
+  # Verify if Docker service is enabled
+  sudo systemctl is-enabled docker
+
+  # If not enable it
+  sudo systemctl enable docker.service
+  sudo systemctl enable containerd.service
+  ```
+>[!IMPORTANT]
+>**Reboot before proceeding further**
+
+- [**Install the NVIDIA Container Toolkit**](http://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+```
+sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+- **Enabling Nvidia GPU for simulation**
+
+  | Hardware | Requirement  |
+  | :------- | :----------- |
+  | GPU      | CUDA-enabled |
+
+  | Software      | Requirement                                                           |
+  | :------------ | :-------------------------------------------------------------------- |
+  | Nvidia Driver | - Ubuntu 22.04 `>=515.43.04` 
+  
+- Check [Docker docs](/docs/docker.md) for more information on docker and Nvidia.
+
+```
+# also run this command locally before proceding
+xhost +local:docker
+```
+- Ensure that you change the filepath to load your directory in `.devcontainer/devcontainer.json`
+```json
+"mounts": [
+        "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind",
+        "source=<path for the data>,target=/app/data,type=bind",
+        "source=<path for the annotations>,target=/app/annotations,type=bind"
+    ],
+```
+
+- **Enter the container**
+    - Open Command Pallete with `Ctrl+Shift+P`
+    - Select **Dev Containers: Rebuild and Reopen in Container**

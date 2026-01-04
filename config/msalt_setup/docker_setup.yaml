@@ -1,0 +1,35 @@
+name: "docker_setup"
+
+paths:
+  lidar_folder: "/app/data/lidar"
+
+  cameras:
+    - id: "CAM_1"
+      name: "Front Center"
+      image_folder: "/app/data/camera1"
+      intrinsics: "/app/data/camera1_intrinsics.txt"
+      extrinsics: "/app/data/camera1_extrinsics.txt"
+    - id: "CAM_2"
+      name: "Front Left"
+      image_folder: "/app/data/camera2"
+      intrinsics: "/app/data/camera2_intrinsics.txt"
+      extrinsics: "/app/data/camera2_extrinsics.txt"
+    - id: "CAM_3"
+      name: "Front Right"
+      image_folder: "/app/data/camera3"
+      intrinsics: "/app/data/camera3_intrinsics.txt"
+      extrinsics: "/app/data/camera3_extrinsics.txt"
+    - id: "CAM_4"
+      name: "Rear Left"
+      image_folder: "/app/data/camera4"
+      intrinsics: "/app/data/camera4_intrinsics.txt"
+      extrinsics: "/app/data/camera4_extrinsics.txt"
+    - id: "CAM_5"
+      name: "Rear Right"
+      image_folder: "/app/data/camera5"
+      intrinsics: "/app/data/camera5_intrinsics.txt"
+      extrinsics: "/app/data/camera5_extrinsics.txt"
+
+extensions:
+  images: ".png"
+  lidar: ".pcd"
