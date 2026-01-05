@@ -4,12 +4,7 @@ segmentation:
   device: "cuda"
   conf_threshold: 0.5
 
-detection:
-  name: "YOLOv11"
-  weights: "yolov11_b.pt"
-  conf_threshold: 0.5
-
 tracking:
-  name: "BotSORT"
-  weights: "botsort_b.pt"
+  name: "SAM2-tracking"
+  weights: "sam2_b.pt"
   conf_threshold: 0.5

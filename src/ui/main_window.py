@@ -111,6 +111,7 @@ class MainWindow(QMainWindow):
         # Initialize the Grid Window (Hidden by default)
         self.batch_grid_window = BatchGridWindow(self.data_controller, self.annotation_manager)
         self.batch_grid_window.request_jump.connect(self.load_frame)
+        self.batch_grid_window.data_modified.connect(self.save_specific_frame)
         self.automation_panel.grid_view_requested.connect(self.open_grid_view)
         
         # Save (Ctrl+S)
@@ -175,6 +176,23 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage(f"Saved: {filename}", 3000)
         logger.info(f"Exported annotation to: {filename}")
+        
+    def save_specific_frame(self, frame_idx: int):
+        """
+        Saves a specific frame index to disk immediately.
+        Triggered by Batch View auto-save.
+        """
+        base_out = Path(self.data_controller.cfg.output.dir)
+        boxes_dir = base_out / "3d"
+        meta_dir = base_out / "metadata"
+
+        # Construct the correct filename for the specific frame
+        filename = f"{frame_idx:06d}.json"
+
+        self.annotation_manager.save_frame(
+            frame_idx, boxes_dir, meta_dir, filename
+        )
+        logger.debug(f"Auto-saved Frame {frame_idx}")
 
     def add_dock(self, widget: BasePluginWidget, title: str, area: Qt.DockWidgetArea):
         dock = QDockWidget(title, self)

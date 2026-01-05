@@ -76,6 +76,7 @@ class AnnotationManager:
                 "obj_id": str(box.track_id),
                 "source_2d": box.source_2d,  # {'cam_id':..., 'rect':...}
                 "point_indices": indices_list,
+                "visual_overrides": box.visual_overrides
             }
             meta_list.append(meta_struct)
 
@@ -141,7 +142,10 @@ class AnnotationManager:
                 if obj_id in meta_data:
                     m = meta_data[obj_id]
                     box.source_2d = m.get("source_2d")
-
+                    
+                    if "visual_overrides" in m:
+                        box.visual_overrides = m["visual_overrides"]
+                    
                     indices = m.get("point_indices")
                     if indices:
                         box.point_indices = np.array(indices, dtype=int)
