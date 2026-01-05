@@ -261,6 +261,20 @@ class MainWindow(QMainWindow):
         self.save_current_work()
 
     def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int):
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        selected_box = next((b for b in current_boxes if b.selected), None)
+        
+        if selected_box:
+            selected_box.visual_overrides[cam_id] = [x, y, w, h]
+            
+            logger.info(f"Updated visual override for Track {selected_box.track_id} on {cam_id}")
+            self.statusBar().showMessage(f"Visuals aligned for Track {selected_box.track_id}", 2000)
+            
+            # Refresh to show the new box
+            self.refresh_views_only()
+            self.save_current_work()
+            return
+            
         # Logic: Box -> SAM2 Mask -> 3D Projection -> Box Fit
         if (
             self.current_frame_data is None
