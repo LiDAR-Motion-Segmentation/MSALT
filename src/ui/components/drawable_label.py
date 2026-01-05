@@ -35,6 +35,7 @@ class DrawableLabel(QLabel):
         self.current_boxes_3d = []
         self.intrinsic = None
         self.extrinsic = None
+        self.camera_id = None
 
     def set_original_resolution(self, w: int, h: int) -> None:
         self.orig_width = w
@@ -102,6 +103,9 @@ class DrawableLabel(QLabel):
             # Clear visual box after release
             self.current_rect = None
             self.update()
+            
+    def set_camera_id(self, cam_id: str):
+        self.camera_id = cam_id
 
     def paintEvent(self, event):
         # draw the image
@@ -123,13 +127,19 @@ class DrawableLabel(QLabel):
         scale_y = self.height() / self.orig_height
 
         for box in self.current_boxes_3d:
-            # Handle both legacy (list) and new (dict) formats
-            rect_2d = GeometryUtils.project_box_to_image(
-                box, 
-                self.extrinsic, 
-                self.intrinsic, 
-                (self.orig_height, self.orig_width)
-            )
+            rect_2d = None
+            is_manual_override = False
+            
+            overrides = getattr(box, "visual_overrides", {})
+            
+            if self.camera_id and self.camera_id in overrides:
+                rect_2d = overrides[self.camera_id]
+                is_manual_override = True
+            else:
+                # Use standard 3D projection for all other cameras
+                rect_2d = GeometryUtils.project_box_to_image(
+                    box, self.extrinsic, self.intrinsic, (self.orig_height, self.orig_width)
+                )
             
             if not rect_2d:
                 continue
@@ -142,17 +152,22 @@ class DrawableLabel(QLabel):
             sw = int(rw * scale_x)
             sh = int(rh * scale_y)
             
-            # Default Green, Yellow if selected
-            base_color = QColor(0, 255, 0)
+            # Define Color
             if box.selected:
-                base_color = QColor(255, 255, 0) # Yellow
+                color = QColor(255, 255, 0) # Yellow
             elif box.label == "moving_people":
-                base_color = QColor(255, 0, 0) # Red
+                color = QColor(255, 0, 0)   # Red
             elif box.label == "static_car":
-                base_color = QColor(0, 150, 255) # Blue
+                color = QColor(0, 150, 255) # Blue
+            else:
+                color = QColor(0, 255, 0)   # Green
 
             # Draw Box
-            pen = QPen(base_color, 2)
+            pen = QPen(color, 2)
+            if is_manual_override:
+                 # Visual cue: line implies "Manual Edit"
+                 pen.setStyle(Qt.PenStyle.SolidLine)
+                 
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(sx, sy, sw, sh)
