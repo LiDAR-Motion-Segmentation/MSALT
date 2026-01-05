@@ -41,6 +41,7 @@ class CameraStripWidget(BasePluginWidget):
 
             # Image Placeholder
             lbl_img = DrawableLabel()
+            lbl_img.set_camera_id(cam_id)
             lbl_img.setStyleSheet("background-color: #111; border: 1px solid #444;")
             lbl_img.setMinimumSize(320, 240)
             lbl_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
