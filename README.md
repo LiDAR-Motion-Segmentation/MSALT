@@ -60,8 +60,14 @@ uv run main.py
 <!-- <video src="./assets/annotation_video_box_editing.mp4" controls title="A short video demonstration" width="600">
 </video> -->
 
-## Batch mode
-![alt text](./assets/batch_mode_v1.png)
+## Batch mode editing
+![alt text](./assets/batch_mode_v2.png)
+- How it works :
+1. Open Batch View (B).
+2. You see 16 frames. Frame 10 has the box slightly too far left.
+3. Click Frame 10. It glows Yellow.
+4. Press D tap-tap-tap. The box moves right instantly.
+5. Press Q. The box rotates slightly.
 
 ## Data structure
 - MSALT expects your data to be organized as follows. Define the paths in `config/config.yaml`
