@@ -249,7 +249,8 @@ class BatchGridWindow(QWidget):
         self.setFocus()
         
     def keyPressEvent(self, event: QKeyEvent):
-        """Handle WASD QE RF for the active frame and TRIGGER AUTO-SAVE"""
+        """Handle WASD (Move), QE (Rotate), RF (Up/Down)
+        + SHIFT modifier for Scaling and TRIGGER AUTO-SAVE"""
         if self.active_frame_idx == -1 or self.active_frame_idx not in self.widgets_map:
             super().keyPressEvent(event)
             return
@@ -260,38 +261,69 @@ class BatchGridWindow(QWidget):
         
         STEP_MOVE = 0.1  # Meters
         STEP_ROT = 0.05  # Radians (~3 degrees)
+        STEP_SCALE = 0.1  # Meters
         
         key = event.key()
         changed = False # Track if we actually changed anything
+        modifiers = event.modifiers()
+        is_shift = (modifiers & Qt.KeyboardModifier.ShiftModifier)
         
         # Translation (LiDAR Coords: X=Forward, Y=Left)
-        if key == Qt.Key.Key_W:
-            box.x += STEP_MOVE
-            changed = True
-        elif key == Qt.Key.Key_S:
-            box.x -= STEP_MOVE
-            changed = True
-        elif key == Qt.Key.Key_A:
-            box.y += STEP_MOVE
-            changed = True
-        elif key == Qt.Key.Key_D:
-            box.y -= STEP_MOVE
+        # Z-AXIS (Height) CONTROL 
+        # R / F for Up / Down
+        if key == Qt.Key.Key_R:
+            if is_shift:
+                box.dz += STEP_SCALE # Taller
+            else:
+                box.z += STEP_MOVE   # Move Up
             changed = True
             
-        # Rotation (Heading)
+        elif key == Qt.Key.Key_F:
+            if is_shift:
+                box.dz = max(0.1, box.dz - STEP_SCALE) # Shorter (Prevent negative)
+            else:
+                box.z -= STEP_MOVE   # Move Down
+            changed = True
+
+        # X-AXIS (Length) CONTROL 
+        # W / S for Forward / Backward
+        elif key == Qt.Key.Key_W:
+            if is_shift:
+                box.dx += STEP_SCALE # Longer
+            else:
+                box.x += STEP_MOVE   # Move Forward
+            changed = True
+            
+        elif key == Qt.Key.Key_S:
+            if is_shift:
+                box.dx = max(0.1, box.dx - STEP_SCALE) # Shorter
+            else:
+                box.x -= STEP_MOVE   # Move Backward
+            changed = True
+
+        # Y-AXIS (Width) CONTROL 
+        # A / D for Left / Right
+        elif key == Qt.Key.Key_A:
+            if is_shift:
+                box.dy += STEP_SCALE # Wider
+            else:
+                box.y += STEP_MOVE   # Move Left
+            changed = True
+            
+        elif key == Qt.Key.Key_D:
+            if is_shift:
+                box.dy = max(0.1, box.dy - STEP_SCALE) # Thinner
+            else:
+                box.y -= STEP_MOVE   # Move Right
+            changed = True
+
+        # ROTATION (Yaw)
+        # Q / E (Shift usually not needed for rotation speed, but possible)
         elif key == Qt.Key.Key_Q:
             box.heading += STEP_ROT
             changed = True
         elif key == Qt.Key.Key_E:
             box.heading -= STEP_ROT
-            changed = True
-            
-        # Optional: Height (Z)
-        elif key == Qt.Key.Key_R: # Up
-            box.z += STEP_MOVE
-            changed = True
-        elif key == Qt.Key.Key_F: # Down
-            box.z -= STEP_MOVE
             changed = True
             
         else:

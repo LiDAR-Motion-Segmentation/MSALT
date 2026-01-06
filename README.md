@@ -31,7 +31,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 uv run main.py
 ```
-![alt text](./assets/ui_v10.png)
+![alt text](./assets/ui_v11.png)
 
 ## Model weights
 - Download the SAM 2 checkpoints and place them in the checkpoints/ directory (create if missing).
@@ -68,6 +68,14 @@ uv run main.py
 3. Click Frame 10. It glows Yellow.
 4. Press D tap-tap-tap. The box moves right instantly.
 5. Press Q. The box rotates slightly.
+
+| Action        | Key       | Shift + Key     |
+|---------------|-----------|-----------------|
+| Forward/Back  | W / S     | Scale Length    |
+| Left/Right    | A / D     | Scale Width     |
+| Up/Down       | R / F     | Scale Height    |
+| Rotate        | Q / E     | No Change       |
+
 
 ## Data structure
 - MSALT expects your data to be organized as follows. Define the paths in `config/config.yaml`
