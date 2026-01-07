@@ -157,10 +157,10 @@ class DrawableLabel(QLabel):
                 color = QColor(255, 255, 0) # Yellow
             elif box.label == "moving_people":
                 color = QColor(255, 0, 0)   # Red
-            elif box.label == "static_car":
-                color = QColor(0, 150, 255) # Blue
-            else:
+            elif box.label == "static_people":
                 color = QColor(0, 255, 0)   # Green
+            else:
+                color = QColor(0, 150, 255) # Blue
 
             # Draw Box
             pen = QPen(color, 2)

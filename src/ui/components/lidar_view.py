@@ -296,8 +296,8 @@ class LidarVisualizer(BasePluginWidget):
                 "moving_people": [1.0, 0.0, 0.0, 1.0],  # Red
                 "static_people": [1.0, 1.0, 0.0, 1.0],  # Yellow
                 "static_car": [0.0, 0.5, 1.0, 1.0],  # Sky Blue
-                "cyclist": [1.0, 0.5, 0.0, 1.0],  # Orange
-                "noise": [0.5, 0.0, 0.5, 1.0],  # Purple
+                "moving_car": [1.0, 0.5, 0.0, 1.0],  # Orange
+                "unknown": [0.5, 0.0, 0.5, 1.0],  # Purple
             }
             default_color = [0.0, 1.0, 0.0, 1.0]  # Green
 
@@ -345,7 +345,7 @@ class LidarVisualizer(BasePluginWidget):
                 pts.append(corners[start])
                 pts.append(corners[end])
 
-            pts = np.array(pts)
+            pts: np.ndarray = np.array(pts)
 
             # create line item
             line_item = gl.GLLinePlotItem(
@@ -363,3 +363,7 @@ class LidarVisualizer(BasePluginWidget):
 
     def reset(self):
         self.scatter.setData(pos=np.zeros((0, 3)))
+        
+    def get_box_color(self, box):
+        if box.selected:
+            return (1, 1, 0, 1) # Yellow
