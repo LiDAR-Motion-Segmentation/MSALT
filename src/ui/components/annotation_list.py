@@ -11,17 +11,20 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from src.core.objects import BoundingBox3D
 from src.data.structures import FrameData
-
+from typing import List, Dict
 
 class AnnotationListWidget(QWidget):
     # Signals
     box_selected = pyqtSignal(BoundingBox3D)  # When user clicks a row
     box_deleted = pyqtSignal(BoundingBox3D)  # When user clicks delete
-    label_changed = pyqtSignal(BoundingBox3D, str)  # When combo changes
+    # label_changed = pyqtSignal(BoundingBox3D, str)  # When combo changes
 
-    def __init__(self):
+    def __init__(self, label_config: List[Dict]):
         super().__init__()
-        self.current_boxes = []
+        self.current_boxes: list = []
+        self.label_config = label_config or [
+            {"name": "Unknown", "color": [128, 128, 128]}
+        ]
         self._init_ui()
 
     def _init_ui(self):
@@ -31,7 +34,7 @@ class AnnotationListWidget(QWidget):
         lbl_layout = QHBoxLayout()
         lbl_layout.addWidget(QLabel("Type:"))
         self.combo_label = QComboBox()
-        self.combo_label.addItems(["moving_people", "static_people", "unknown"])
+        self._populate_labels()
         lbl_layout.addWidget(self.combo_label)
         layout.addLayout(lbl_layout)
 
@@ -57,6 +60,19 @@ class AnnotationListWidget(QWidget):
         )
         btn_del.clicked.connect(self.delete_selected)
         layout.addWidget(btn_del)
+        
+    def _populate_labels(self):
+        """Fills the combo box from the config"""
+        self.combo_label.clear()
+        for item in self.label_config:
+            name = item.get("name", "Unkown")
+            self.combo_label.addItem(name)
+    
+    def get_color_for_label(self, label_name: str):
+        for item in self.label_config:
+            if item["name"] == label_name:
+                return item.get("color", [0, 255, 0])
+        return [0, 255, 0] # Default Green
 
     def update_list(self, boxes: list[BoundingBox3D]):
         self.list_widget.clear()
