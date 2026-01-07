@@ -94,7 +94,8 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock_timeline)
 
         # RIGHT: Annotation List 
-        self.list_panel = AnnotationListWidget()
+        labels = getattr(self.data_controller.cfg, "labels", None)
+        self.list_panel = AnnotationListWidget(label_config=labels)
         self.add_dock(
             self.list_panel, "Annotations", Qt.DockWidgetArea.RightDockWidgetArea
         )
