@@ -3,9 +3,8 @@ import pyqtgraph
 import pyqtgraph.opengl as gl
 import numpy as np
 from PyQt6.QtWidgets import (QWidget, QGridLayout, QLabel, QVBoxLayout, 
-                             QScrollArea, QFrame)
+                             QScrollArea, QFrame, QHBoxLayout, QPushButton)
 from PyQt6.QtCore import Qt, pyqtSignal
-
 from src.core.geometry import GeometryUtils
 from src.core.objects import BoundingBox3D
 from copy import deepcopy
@@ -95,10 +94,33 @@ class MiniFrameWidget(gl.GLViewWidget):
         """Re-draws the scene (useful after moving the box)."""
         self._draw_scene()
         
+        # Keep the camera centered on the box if it moves
+        self.opts['center'] = pyqtgraph.Vector(self.box.x, self.box.y, self.box.z)
+        
     def mousePressEvent(self, ev):
         """Handle click to jump to frame."""
         self.clicked.emit(self.frame_idx)
         super().mousePressEvent(ev)
+        
+    def set_view_mode(self, mode: str):
+        """
+        Snaps camera to specific axis-aligned views.
+        """
+        center = pyqtgraph.Vector(self.box.x, self.box.y, self.box.z)
+        self.opts['center'] = center
+        
+        if mode == "TOP":
+            # Looking down Z-axis
+            self.setCameraPosition(distance=6, elevation=90, azimuth=-90)
+        elif mode == "SIDE":
+            # Looking at XZ plane 
+            self.setCameraPosition(distance=6, elevation=0, azimuth=0)
+        elif mode == "FRONT":
+            # Looking at YZ plane 
+            self.setCameraPosition(distance=6, elevation=0, azimuth=-90)
+        else:
+            # Default Perspective / Iso-ish
+            self.setCameraPosition(distance=6, elevation=30, azimuth=-135)   
         
 class BatchGridWindow(QWidget):
     request_jump = pyqtSignal(int)
@@ -133,6 +155,65 @@ class BatchGridWindow(QWidget):
         self.grid_layout.setSpacing(5)
         self.scroll.setWidget(self.grid_container)
         self.main_layout.addWidget(self.scroll)
+        
+        self.toolbar_layout = QHBoxLayout()
+        self.main_layout.addLayout(self.toolbar_layout) # Add before the scroll area
+        
+        # Create Buttons
+        btn_top = QPushButton("Top (XY)")
+        btn_side = QPushButton("Side (XZ)")
+        btn_front = QPushButton("Front (YZ)")
+        btn_reset = QPushButton("Reset 3D")
+        
+        # 1. Top View -> Blue (Standard 'Z-up' association)
+        btn_top.setStyleSheet("""
+            QPushButton {
+                background-color: #1976D2; color: white; font-weight: bold; 
+                padding: 6px 12px; border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #2196F3; }
+        """)
+        
+        # 2. Side View -> Green
+        btn_side.setStyleSheet("""
+            QPushButton {
+                background-color: #388E3C; color: white; font-weight: bold; 
+                padding: 6px 12px; border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #4CAF50; }
+        """)
+
+        # 3. Front View -> Orange/Red
+        btn_front.setStyleSheet("""
+            QPushButton {
+                background-color: #E64A19; color: white; font-weight: bold; 
+                padding: 6px 12px; border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #FF5722; }
+        """)
+
+        # 4. Reset -> Grey (Neutral)
+        btn_reset.setStyleSheet("""
+            QPushButton {
+                background-color: #455A64; color: white; font-weight: bold; 
+                padding: 6px 12px; border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #607D8B; }
+        """)
+            
+        # Add to Layout
+        self.toolbar_layout.addWidget(btn_top)
+        self.toolbar_layout.addWidget(btn_side)
+        self.toolbar_layout.addWidget(btn_front)
+        self.toolbar_layout.addWidget(btn_reset)
+            
+        # Connect Signals
+        btn_top.clicked.connect(lambda: self.change_all_views("TOP"))
+        btn_side.clicked.connect(lambda: self.change_all_views("SIDE"))
+        btn_front.clicked.connect(lambda: self.change_all_views("FRONT"))
+        btn_reset.clicked.connect(lambda: self.change_all_views("RESET"))
+        
+        self.toolbar_layout.addStretch() # Push buttons to left
         
     def load_track(self, track_id, start_frame_idx, window_size=16):
         """
@@ -340,3 +421,17 @@ class BatchGridWindow(QWidget):
     def _handle_jump(self, f_idx):
         """Pass the signal up to Main Window."""
         self.request_jump.emit(f_idx)
+        
+    def change_all_views(self, mode: str):
+        """Iterates over all active mini-widgets and changes their camera angle."""
+        for items in self.widgets_map.values():
+            widget = items['widget']
+            widget.set_view_mode(mode)
+            
+        # Update Help Text
+        if mode == "SIDE":
+            self.header.setText("Side View (XZ). Controls: WASD move X/Z. (Y-axis hidden)")
+        elif mode == "TOP":
+            self.header.setText("Top View (XY). Controls: WASD move X/Y. (Z-axis hidden)")
+        else:
+            self.header.setText("3D View. WASD=Move, QE=Rotate")
