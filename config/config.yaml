@@ -9,3 +9,24 @@ app:
 
 output:
   dir: "${hydra:runtime.cwd}/SALT_outputs_annotations"
+
+labels:
+  - name: "moving_people"
+    color: [255, 0, 0]        # Red
+    hotkey: "1"               
+    
+  - name: "static_people"
+    color: [255, 255, 0]      # Yellow
+    hotkey: "2"
+
+  - name: "unknown"
+    color: [0, 255, 0]        # Green
+    hotkey: "3"
+
+  - name: "static_car"
+    color: [0, 0, 255]        # Blue
+    hotkey: "4"
+
+  - name: "moving_car"
+    color: [255, 0, 255]      # Magenta
+    hotkey: "5"

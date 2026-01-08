@@ -19,13 +19,20 @@ class CameraStripWidget(BasePluginWidget):
         self.camera_ids = camera_ids
         self.image_labels: Dict[str, DrawableLabel] = {}
         self._setup_ui()
+        
+    def set_label_config(self, label_config: List[Dict]):
+        self.label_config = label_config
+        
+        # self.image_labels is a dict: {'CAM_FRONT': DrawableLabel, ...}
+        if hasattr(self, 'image_labels'):
+            for cam_id, label_widget in self.image_labels.items():
+                label_widget.set_label_colors(label_config)
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        # scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         container = QWidget()
         self.strip_layout = QHBoxLayout(container)
 
@@ -41,6 +48,8 @@ class CameraStripWidget(BasePluginWidget):
 
             # Image Placeholder
             lbl_img = DrawableLabel()
+            if hasattr(self, 'label_config'):
+                lbl_img.set_label_colors(self.label_config)
             lbl_img.set_camera_id(cam_id)
             lbl_img.setStyleSheet("background-color: #111; border: 1px solid #444;")
             lbl_img.setMinimumSize(320, 240)

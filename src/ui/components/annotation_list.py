@@ -9,9 +9,10 @@ from PyQt6.QtWidgets import (
     QLabel,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QShortcut, QKeySequence
 from src.core.objects import BoundingBox3D
 from src.data.structures import FrameData
-
+from typing import List, Dict
 
 class AnnotationListWidget(QWidget):
     # Signals
@@ -19,26 +20,32 @@ class AnnotationListWidget(QWidget):
     box_deleted = pyqtSignal(BoundingBox3D)  # When user clicks delete
     label_changed = pyqtSignal(BoundingBox3D, str)  # When combo changes
 
-    def __init__(self):
+    def __init__(self, label_config: List[Dict]):
         super().__init__()
-        self.current_boxes = []
+        self.current_boxes: list = []
+        self.label_config = label_config or [
+            {"name": "Unknown", "color": [0, 255, 0], "hotkey": "0"}
+        ]
+        self.color_map = {item['name']: item['color'] for item in self.label_config}
         self._init_ui()
+        self._setup_hotkeys()
 
     def _init_ui(self):
-        layout = QVBoxLayout(self)
+        self.layout = QVBoxLayout(self)
 
-        # Label Selector (Global for next box)
+        # Label Selector
         lbl_layout = QHBoxLayout()
-        lbl_layout.addWidget(QLabel("Type:"))
+        lbl_layout.addWidget(QLabel("Active Label :"))
         self.combo_label = QComboBox()
-        self.combo_label.addItems(["moving_people", "static_people", "unknown"])
+        for item in self.label_config:
+            self.combo_label.addItem(item["name"])
         lbl_layout.addWidget(self.combo_label)
-        layout.addLayout(lbl_layout)
+        self.layout.addLayout(lbl_layout)
 
         # list of objects
         self.list_widget = QListWidget()
         self.list_widget.itemClicked.connect(self._on_item_clicked)
-        layout.addWidget(self.list_widget)
+        self.layout.addWidget(self.list_widget)
 
         # Delete Button
         btn_del = QPushButton("Delete Selected (Del)")
@@ -56,8 +63,24 @@ class AnnotationListWidget(QWidget):
         """
         )
         btn_del.clicked.connect(self.delete_selected)
-        layout.addWidget(btn_del)
+        self.layout.addWidget(btn_del)
+        
+    def _setup_hotkeys(self):
+        for i, item in enumerate(self.label_config):
+            key = item.get("hotkey")
+            if key:
+                shortcut = QShortcut(QKeySequence(key), self)
+                shortcut.activated.connect(lambda idx=i: self.set_active_label_index(idx))
+                
+    def set_active_label_index(self, index):
+        if 0 <= index < self.combo_label.count():
+            self.combo_label.setCurrentIndex(index)
+            self.label_changed.emit(self.combo_label.currentText())
 
+    def get_color_rgb(self, label_name: str) -> List[int]:
+        """Returns [R, G, B] list. Defaults to Green."""
+        return self.color_map.get(label_name, [0, 255, 0])
+        
     def update_list(self, boxes: list[BoundingBox3D]):
         self.list_widget.clear()
         self.current_boxes = boxes

@@ -9,6 +9,7 @@ from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
 from src.core.objects import BoundingBox3D
 from src.core.geometry import GeometryUtils
+from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -231,13 +232,26 @@ class CustomGLWidget(gl.GLViewWidget):
         painter.end()      
         
 class LidarVisualizer(BasePluginWidget):
-    def __init__(self):
-        super().__init__(title="LiDAR 3D View")
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self._setup_ui()
         self.current_boxes = []
         self.box_items = []         # Visual Items (Lines)
         self.debug_items = []
+        self.label_color_map = {}
         self.current_points = None
+        
+    def set_label_colors(self, label_config: List[Dict]):
+        """
+        Populate the color lookup dictionary.
+        Format: {'name': (r, g, b, a)} normalized to 0.0-1.0
+        """
+        self.label_color_map = {}
+        for item in label_config:
+            name = item["name"]
+            rgb = item["color"]
+            # Convert [255, 0, 0] -> (1.0, 0.0, 0.0, 1.0)
+            self.label_color_map[name] = (rgb[0]/255.0, rgb[1]/255.0, rgb[2]/255.0, 1.0)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -292,19 +306,8 @@ class LidarVisualizer(BasePluginWidget):
             colors[:, 0] = np.clip((z + 2) / 5, 0, 1)
             colors[:, 1] = 0.5
 
-            class_colors = {
-                "moving_people": [1.0, 0.0, 0.0, 1.0],  # Red
-                "static_people": [1.0, 1.0, 0.0, 1.0],  # Yellow
-                "static_car": [0.0, 0.5, 1.0, 1.0],  # Sky Blue
-                "cyclist": [1.0, 0.5, 0.0, 1.0],  # Orange
-                "noise": [0.5, 0.0, 0.5, 1.0],  # Purple
-            }
-            default_color = [0.0, 1.0, 0.0, 1.0]  # Green
-
             for box in boxes:
-                # Color these points RED
-                lbl = box.label.strip() if box.label else "unknown"
-                target_color = class_colors.get(lbl, default_color)
+                target_color = self.label_color_map.get(box.label, (0.0, 1.0, 0.0, 1.0))
 
                 indices = GeometryUtils.get_points_in_box(points, box)
                     
@@ -345,7 +348,7 @@ class LidarVisualizer(BasePluginWidget):
                 pts.append(corners[start])
                 pts.append(corners[end])
 
-            pts = np.array(pts)
+            pts: np.ndarray = np.array(pts)
 
             # create line item
             line_item = gl.GLLinePlotItem(
@@ -363,3 +366,7 @@ class LidarVisualizer(BasePluginWidget):
 
     def reset(self):
         self.scatter.setData(pos=np.zeros((0, 3)))
+        
+    def get_box_color(self, box):
+        if box.selected:
+            return (1, 1, 0, 1) # Yellow

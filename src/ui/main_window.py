@@ -45,6 +45,7 @@ class MainWindow(QMainWindow):
         )
 
         self.seg_engine = SegmentationEngine(self.data_controller.cfg.models)
+        self.labels_cfg= getattr(self.data_controller.cfg, "labels", None)
 
         # Initializing the history
         self.history = CommandHistory()
@@ -67,12 +68,14 @@ class MainWindow(QMainWindow):
         
         # CENTER: LiDAR View 
         self.lidar_widget = LidarVisualizer()
+        self.lidar_widget.set_label_colors(self.labels_cfg)
         self.setCentralWidget(self.lidar_widget)
         self.lidar_widget.view_widget.box_created.connect(self.handle_3d_annotation)
 
         # TOP: Camera Strip 
         cam_ids = self.data_controller.get_camera_ids()
         self.cam_widget = CameraStripWidget(cam_ids)
+        self.cam_widget.set_label_config(self.labels_cfg)
         self.add_dock(self.cam_widget, "Cameras", Qt.DockWidgetArea.TopDockWidgetArea)
 
         # LEFT: Automation Panel 
@@ -94,7 +97,7 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock_timeline)
 
         # RIGHT: Annotation List 
-        self.list_panel = AnnotationListWidget()
+        self.list_panel = AnnotationListWidget(label_config=self.labels_cfg)
         self.add_dock(
             self.list_panel, "Annotations", Qt.DockWidgetArea.RightDockWidgetArea
         )
