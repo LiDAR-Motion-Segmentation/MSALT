@@ -75,6 +75,7 @@ class MainWindow(QMainWindow):
         # TOP: Camera Strip 
         cam_ids = self.data_controller.get_camera_ids()
         self.cam_widget = CameraStripWidget(cam_ids)
+        self.cam_widget.set_label_config(self.labels_cfg)
         self.add_dock(self.cam_widget, "Cameras", Qt.DockWidgetArea.TopDockWidgetArea)
 
         # LEFT: Automation Panel 
