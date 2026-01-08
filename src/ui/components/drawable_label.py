@@ -3,6 +3,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPoint
 from PyQt6.QtGui import QPainter, QPen, QColor, QMouseEvent, QFont, QFontMetrics
 import logging
 from src.core.geometry import GeometryUtils
+from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,9 @@ class DrawableLabel(QLabel):
         self.intrinsic = None
         self.extrinsic = None
         self.camera_id = None
+        
+        # Default Map (Green Fallback)
+        self.label_color_map = {}
 
     def set_original_resolution(self, w: int, h: int) -> None:
         self.orig_width = w
@@ -106,6 +110,18 @@ class DrawableLabel(QLabel):
             
     def set_camera_id(self, cam_id: str):
         self.camera_id = cam_id
+        
+    def set_label_colors(self, label_config: List[Dict]):
+        """
+        Populate the color lookup dictionary.
+        Format: {'name': QColor(r, g, b)}
+        """
+        self.label_color_map = {}
+        for item in label_config:
+            name = item["name"]
+            rgb = item["color"]
+            # Store as QColor for fast drawing
+            self.label_color_map[name] = QColor(rgb[0], rgb[1], rgb[2])
 
     def paintEvent(self, event):
         # draw the image
@@ -155,12 +171,9 @@ class DrawableLabel(QLabel):
             # Define Color
             if box.selected:
                 color = QColor(255, 255, 0) # Yellow
-            elif box.label == "moving_people":
-                color = QColor(255, 0, 0)   # Red
-            elif box.label == "static_people":
-                color = QColor(0, 255, 0)   # Green
             else:
-                color = QColor(0, 150, 255) # Blue
+                # Dynamic Lookup
+                color = self.label_color_map.get(box.label, QColor(0, 255, 0))
 
             # Draw Box
             pen = QPen(color, 2)
