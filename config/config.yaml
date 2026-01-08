@@ -20,13 +20,13 @@ labels:
     hotkey: "2"
 
   - name: "unknown"
-    color: [128, 128, 128]    # Grey
+    color: [0, 255, 0]        # Green
     hotkey: "3"
 
-  - name: "moving_car"
+  - name: "static_car"
     color: [0, 0, 255]        # Blue
     hotkey: "4"
 
-  - name: "static_car"
-    color: [255, 255, 255]    # White
+  - name: "moving_car"
+    color: [255, 0, 255]      # Magenta
     hotkey: "5"
