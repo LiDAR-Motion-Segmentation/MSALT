@@ -12,13 +12,15 @@ MSALT is a high-performance, open-source annotation tool designed for sensor fus
 ### Features:
 
 - Multi-Sensor Fusion: Seamlessly project 3D LiDAR points onto 2D camera frames and vice-versa.
-- AI-Assisted Labeling: Integrated SAM 2 (Segment Anything Model) for one-click object segmentation.
+- AI-Assisted Labeling: Integrated SAM 2 (Segment Anything Model) for automatic object segmentation.
 - Automation Pipeline: Features linear propagation and "Copy-to-Next" automation to label sequences 10x faster.
 - Semantic Point Clouds: Auto-colors LiDAR points based on the semantic class of the 2D bounding box.
 - Split-State Saving: Decouples clean 3D datasets (.json) from editor metadata, ensuring compatibility with standard ML pipelines.
 - Modular Config: Flexible YAML-based configuration for different robot platforms (e.g., Husky, SemanticKITTI).
+- Batch editing: Easy editing with multiple 3D bounding box view for a set of sequences.
 
 ## Installation
+- You can setup the tool `locally` or using `Docker(Devcontainer)` setup whose intructions are mentioned towards the end of this `readme.md` file
 ```python3
 # MSALT uses uv for blazing fast dependency management.
 git clone https://github.com/LiDAR-Motion-Segmentation/MSALT.git
@@ -61,7 +63,7 @@ uv run main.py
 </video> -->
 
 ## Batch mode editing
-![alt text](./assets/batch_mode_v2.png)
+![alt text](./assets/batch_mode_v3.png)
 - How it works :
 1. Open Batch View (B).
 2. You see 16 frames. Frame 10 has the box slightly too far left.
@@ -76,20 +78,51 @@ uv run main.py
 | Up/Down       | R / F     | Scale Height    |
 | Rotate        | Q / E     | No Change       |
 
+- We have also added the option of `top(XY)`, `side (XZ)`, `front (YZ)` and `reset` for better editing
 
-## Data structure
-- MSALT expects your data to be organized as follows. Define the paths in `config/config.yaml`
+## Input setup
+- MSALT expects your data to be organized as follows. Define the paths in `config/msalt_setup/docker_setup.yaml` or make your own custom file with the paths
 ```
-/path/to/dataset/
-├── velodyne/             # LiDAR Point Clouds (.pcd or .bin)
-│   ├── 000000.pcd
-│   └── ...
-├── image_2/              # Camera Images
-│   ├── 000000.png
-│   └── ...
-└── calib/                # Calibration Files
-    ├── 000000.txt
-    └── ...
+paths:
+  lidar_folder: "/app/data/lidar"
+
+  cameras:
+    - id: "CAM_1"
+      name: "Front Center"
+      image_folder: "/app/data/camera1"
+      intrinsics: "/app/data/camera1_intrinsics.txt"
+      extrinsics: "/app/data/camera1_extrinsics.txt"
+    - id: "CAM_2"
+      name: "Front Left"
+      image_folder: "/app/data/camera2"
+      intrinsics: "/app/data/camera2_intrinsics.txt"
+      extrinsics: "/app/data/camera2_extrinsics.txt"
+    - id: "CAM_3"
+      name: "Front Right"
+      image_folder: "/app/data/camera3"
+      intrinsics: "/app/data/camera3_intrinsics.txt"
+      extrinsics: "/app/data/camera3_extrinsics.txt"
+    - id: "CAM_4"
+      name: "Rear Left"
+      image_folder: "/app/data/camera4"
+      intrinsics: "/app/data/camera4_intrinsics.txt"
+      extrinsics: "/app/data/camera4_extrinsics.txt"
+    - id: "CAM_5"
+      name: "Rear Right"
+      image_folder: "/app/data/camera5"
+      intrinsics: "/app/data/camera5_intrinsics.txt"
+      extrinsics: "/app/data/camera5_extrinsics.txt"
+
+extensions:
+  images: ".png"
+  lidar: ".pcd"
+```
+- In `config/config.yaml` make the modification where you have put your desired file setup with the paths
+```
+defaults:
+  - msalt_setup: <custom file setup name here>  
+  - models: default
+  - _self_
 ```
 
 ## Architecture
