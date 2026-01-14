@@ -8,6 +8,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from src.core.geometry import GeometryUtils
 from src.core.objects import BoundingBox3D
 from copy import deepcopy
+import math
 
 class MiniFrameWidget(gl.GLViewWidget):
     """
@@ -67,28 +68,6 @@ class MiniFrameWidget(gl.GLViewWidget):
             antialias=True
         )
         self.addItem(line_item)        
-        
-    def _add_box_visual(self):
-        corners = self.box.get_corners()
-        # Wireframe indices
-        lines = np.array([
-            [0,1], [1,2], [2,3], [3,0], # Bottom
-            [4,5], [5,6], [6,7], [7,4], # Top
-            [0,4], [1,5], [2,6], [3,7]  # Pillars
-        ])
-        pts = []
-        for start, end in lines:
-            pts.append(corners[start])
-            pts.append(corners[end])
-            
-        line_item = gl.GLLinePlotItem(
-            pos=np.array(pts), 
-            mode='lines', 
-            color=(0, 1, 0, 1), # Green Box
-            width=2, 
-            antialias=True
-        )
-        self.addItem(line_item)
     
     def update_visuals(self):
         """Re-draws the scene (useful after moving the box)."""
@@ -108,20 +87,24 @@ class MiniFrameWidget(gl.GLViewWidget):
         """
         center = pyqtgraph.Vector(self.box.x, self.box.y, self.box.z)
         self.opts['center'] = center
+        self.current_view_mode = mode
+        
+        # Convert box heading (radians) to degrees for PyQtGraph
+        heading_deg = math.degrees(self.box.heading)
         
         if mode == "TOP":
             # Looking down Z-axis
-            self.setCameraPosition(distance=6, elevation=90, azimuth=-90)
+            self.setCameraPosition(distance=6, elevation=90, azimuth=-heading_deg - 90)
         elif mode == "SIDE":
             # Looking at XZ plane 
-            self.setCameraPosition(distance=6, elevation=0, azimuth=0)
+            self.setCameraPosition(distance=6, elevation=0, azimuth=-heading_deg)
         elif mode == "FRONT":
             # Looking at YZ plane 
-            self.setCameraPosition(distance=6, elevation=0, azimuth=-90)
+            self.setCameraPosition(distance=6, elevation=0, azimuth=-heading_deg - 90)
         else:
             # Default Perspective / Iso-ish
-            self.setCameraPosition(distance=6, elevation=30, azimuth=-135)   
-        
+            self.setCameraPosition(distance=6, elevation=30, azimuth=-90)     
+                 
 class BatchGridWindow(QWidget):
     request_jump = pyqtSignal(int)
     data_modified = pyqtSignal(int) 
@@ -433,5 +416,7 @@ class BatchGridWindow(QWidget):
             self.header.setText("Side View (XZ). Controls: WASD move X/Z. (Y-axis hidden)")
         elif mode == "TOP":
             self.header.setText("Top View (XY). Controls: WASD move X/Y. (Z-axis hidden)")
+        elif mode == "FRONT":
+            self.header.setText("Front View (YZ). Controls: WASD move Z/Y. (X-axis hidden)")
         else:
             self.header.setText("3D View. WASD=Move, QE=Rotate")
