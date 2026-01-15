@@ -234,7 +234,8 @@ class BatchGridWindow(QWidget):
         # clears old widgets
         for i in reversed(range(self.grid_layout.count())):
             item = self.grid_layout.itemAt(i)
-            if item.widget(): item.widget().deleteLater()
+            if item.widget(): 
+                item.widget().deleteLater()
             
         start = start_frame_idx
         end = min(self.data_ctrl.get_total_frames(), start + window_size)
@@ -247,15 +248,19 @@ class BatchGridWindow(QWidget):
             boxes = self.anno_mgr.get_boxes(f_idx)
             target = next((b for b in boxes if b.track_id == track_id), None)
             
-            if not target: continue
+            if not target: 
+                continue
             
             frame_data = self.data_ctrl.get(f_idx)
-            if frame_data.point_cloud is None: continue
+            if frame_data.point_cloud is None: 
+                continue
             
             # Crop Points
             points = frame_data.point_cloud
             crop_box = deepcopy(target)
-            crop_box.dx += 5.0; crop_box.dy += 5.0; crop_box.dz += 3.0
+            crop_box.dx += 5.0 
+            crop_box.dy += 5.0
+            crop_box.dz += 3.0
             indices = GeometryUtils.get_points_in_box(points, crop_box)
             crop_points = points[indices]
             
@@ -282,7 +287,8 @@ class BatchGridWindow(QWidget):
         self.set_active_frame(start_frame_idx)
 
     def set_active_frame(self, frame_idx):
-        if frame_idx not in self.widgets_map: return
+        if frame_idx not in self.widgets_map: 
+            return
         self.active_frame_idx = frame_idx
         
         for f_idx, items in self.widgets_map.items():
