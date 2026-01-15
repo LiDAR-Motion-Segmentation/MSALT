@@ -17,8 +17,11 @@ logger = logging.getLogger("MSALT_Entry")
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg: DictConfig):
     print(f"Active Configuration:\n{OmegaConf.to_yaml(cfg)}")
+    
+    # Setting this attribute changes that behavior to allow Resource Sharing with GPU for the 2 windows
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
+    
     app.setApplicationName(cfg.app.window_title)
 
     try:
