@@ -24,7 +24,7 @@ class BoundingBox3D:
     point_indices: Optional[np.ndarray] = None
 
     source_2d: Optional[Dict] = None
-    visual_override_2d: Dict[str, List[int]] = field(default_factory=dict)
+    visual_overrides: Dict[str, List[int]] = field(default_factory=dict)
     
     def to_dict(self) -> Dict:
         data = {
@@ -36,8 +36,8 @@ class BoundingBox3D:
             "heading": self.heading,
         }
         # Only save if it exists to keep JSON clean
-        if self.visual_override_2d:
-            data["visual_override_2d"] = self.visual_override_2d
+        if self.visual_overrides:
+            data["visual_override_2d"] = self.visual_overrides
             
         if self.source_2d:
             data["source_2d"] = self.source_2d
@@ -55,8 +55,10 @@ class BoundingBox3D:
             confidence=data.get("confidence", 1.0)
         )
         # Load overrides if they exist
-        if "visual_override_2d" in data:
-            box.visual_override_2d = data["visual_override_2d"]
+        if "visual_overrides" in data:
+            box.visual_overrides = data["visual_override_2d"]
+        elif "visual_override_2d" in data:
+            box.visual_overrides = data["visual_override_2d"]
             
         if "source_2d" in data:
             box.source_2d = data["source_2d"]
@@ -114,6 +116,10 @@ class BoundingBox3D:
         )
         
         if not scalars_match:
+            return False
+        
+        # Check overrides equality
+        if self.visual_overrides != other.visual_overrides:
             return False
         
         if self.point_indices is None and other.point_indices is None:

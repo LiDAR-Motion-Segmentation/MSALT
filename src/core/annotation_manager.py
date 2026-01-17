@@ -145,6 +145,8 @@ class AnnotationManager:
                     
                     if "visual_overrides" in m:
                         box.visual_overrides = m["visual_overrides"]
+                    elif "visual_override_2d" in m:
+                        box.visual_overrides = m["visual_override_2d"]
                     
                     indices = m.get("point_indices")
                     if indices:

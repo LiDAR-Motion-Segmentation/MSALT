@@ -63,7 +63,7 @@ uv run main.py
 </video> -->
 
 ## Batch mode editing
-![alt text](./assets/batch_mode_v3.png)
+![alt text](./assets/batch_mode_v4.png)
 - How it works :
 1. Open Batch View (B).
 2. You see 16 frames. Frame 10 has the box slightly too far left.

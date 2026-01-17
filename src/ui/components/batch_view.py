@@ -127,10 +127,25 @@ class MiniFrameWidget(gl.GLViewWidget):
             # Alignment: We want to look at the "Right" side of the car.
             self.opts['fov'] = 1
             # -180 is often the "Right" side in PyQtGraph coords when Heading=0
+            
+            # Calculate world-space direction of box's local +Y axis
+            # After rotation: [sin(heading), cos(heading), 0]
+            # PyQtGraph azimuth: atan2(x, y) but with their convention
+            # Need to account for PyQtGraph's coordinate system
+            world_y_dir = np.array([
+            math.sin(self.box.heading),
+            math.cos(self.box.heading),
+            0
+            ])
+            
+            # PyQtGraph azimuth convention: azimuth=0 points along +X, -90 points along +Y
+            # We want to look along world_y_dir, so azimuth = atan2(-world_y_dir[1], world_y_dir[0])
+            # But need to account for the fact that we're looking FROM this direction TO the center
+            azimuth_deg = math.degrees(math.atan2(-world_y_dir[1], world_y_dir[0]))
             self.setCameraPosition(
                 distance=telephoto_dist, 
                 elevation=0, 
-                azimuth= -180 - h_deg
+                azimuth= azimuth_deg
             )
 
         elif mode == "FRONT":
@@ -138,10 +153,18 @@ class MiniFrameWidget(gl.GLViewWidget):
             # Alignment: Look at the "nose" or "tail".
             self.opts['fov'] = 1
             # -90 aligns with X axis
+            
+            # Calculate world-space direction of box's local +X axis
+            world_x_dir = np.array([
+            math.cos(self.box.heading),
+            math.sin(self.box.heading),
+            0
+            ])
+            azimuth_deg = math.degrees(math.atan2(-world_x_dir[1], -world_x_dir[0]))
             self.setCameraPosition(
                 distance=telephoto_dist, 
                 elevation=0, 
-                azimuth= -90 - h_deg
+                azimuth= azimuth_deg
             )
 
         else: 
