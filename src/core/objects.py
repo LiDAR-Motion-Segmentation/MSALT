@@ -24,7 +24,7 @@ class BoundingBox3D:
     point_indices: Optional[np.ndarray] = None
 
     source_2d: Optional[Dict] = None
-    visual_override_2d: Dict[str, List[int]] = field(default_factory=dict)
+    visual_overrides: Dict[str, List[int]] = field(default_factory=dict)
     
     def to_dict(self) -> Dict:
         data = {

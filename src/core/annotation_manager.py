@@ -76,7 +76,7 @@ class AnnotationManager:
                 "obj_id": str(box.track_id),
                 "source_2d": box.source_2d,  # {'cam_id':..., 'rect':...}
                 "point_indices": indices_list,
-                "visual_overrides": box.visual_overrides
+                "visual_override_2d": box.visual_overrides
             }
             meta_list.append(meta_struct)
 
