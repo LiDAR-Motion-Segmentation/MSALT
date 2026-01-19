@@ -1,5 +1,5 @@
 defaults:
-  - msalt_setup: husky_setup  
+  - msalt_setup: nuscenes
   - models: default
   - _self_
 
@@ -8,7 +8,7 @@ app:
   window_size: [1600, 900]
 
 output:
-  dir: "${hydra:runtime.cwd}/SALT_outputs_annotations"
+  dir: "${hydra:runtime.cwd}/MSALT_outputs_annotations_nuscenes"
 
 labels:
   - name: "moving_people"

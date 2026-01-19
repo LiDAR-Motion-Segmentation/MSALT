@@ -1,0 +1,13 @@
+name: "nuscenes_mini"
+
+dataset_type: "nuscenes"
+version: "v1.0-mini"
+
+paths:
+  # The root folder containing 'samples', 'sweeps', 'maps', 'v1.0-mini'
+  root_dir: "/home/soumoroy/Downloads/v1.0-mini"
+  scenes: [1]
+
+extensions:
+  images: ".jpg"
+  lidar: ".pcd.bin"
