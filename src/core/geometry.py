@@ -9,14 +9,14 @@ from typing import Optional
 class GeometryUtils:
     @staticmethod
     def project_lidar_to_image(
-        xyz: np.ndarray, camera_pose: np.ndarray, intr: np.ndarray
+        xyz: np.ndarray, extrinsic: np.ndarray, intr: np.ndarray
     ):
         """
         Projects 3D LiDAR points onto the 2D Image Plane.
         
         Args:
-            xyz: (N, 3) LiDAR points
-            camera_pose: (4, 4) Matrix (Camera -> World/LiDAR)
+            xyz: (N, 3) LiDAR points (in World/Ego Frame)
+            extrinsic: (4, 4) Extrinsic Matrix (World -> Camera)
             intr: (3, 3) Intrinsic Matrix
             
         Returns:
@@ -26,22 +26,31 @@ class GeometryUtils:
         if len(xyz) == 0:
             return np.zeros((0, 2)), np.zeros(0, dtype=bool)
         
-        # Add homogenous coordinates
+        # Ensure (N, 3)
+        xyz = xyz[:, :3]
+        
+        # Add homogenous coordinates [x, y, z, 1]
         pts_h = np.hstack([xyz, np.ones((xyz.shape[0], 1))])
         
-        # World -> Camera (Inverse of Pose)
-        T_world_to_cam = np.linalg.inv(camera_pose)
-        pts_cam = (T_world_to_cam @ pts_h.T).T[:, :3]
+        # Do NOT invert the matrix. 
+        # The loader provides Extrinsics (World -> Camera).
+        # We want P_cam = T_ext * P_world
         
-        # Filter Z > 0
+        # (4,4) @ (4, N) -> (4, N) -> Transpose back to (N, 4)
+        pts_cam_h = (extrinsic @ pts_h.T).T 
+        pts_cam = pts_cam_h[:, :3]
+        
+        # Filter Z > 0 (Points behind camera)
         z = pts_cam[:, 2]
+        valid = z > 0.1 # Small clip plane
         
-        # Small clip plane
-        valid = z > 0 
         pts_cam_valid = pts_cam[valid]
-        proj = (intr @ pts_cam_valid.T).T  # (M, 3)
+        
+        # Project: (u, v, z) = K * (x, y, z)
+        # (3, 3) @ (N, 3).T -> (3, N) -> Transpose -> (N, 3)
+        proj = (intr @ pts_cam_valid.T).T 
 
-        # Normalize: x/z, y/z
+        # Normalize: u = x'/z, v = y'/z
         uv_valid = proj[:, :2] / proj[:, 2:3]
 
         # Map back to full size array
@@ -49,6 +58,79 @@ class GeometryUtils:
         uv[valid] = uv_valid
 
         return uv, valid
+
+    @staticmethod
+    def fit_box_to_cloud(
+        points: np.ndarray, eps: float = 0.5, min_samples: int = 8
+    ) -> dict:
+        """
+        Fits a 3D Bounding Box to the points using OBB (Oriented Bounding Box).
+        """
+        if len(points) < 5:
+            return None
+
+        # Slice to XYZ only (ignore intensity)
+        points = points[:, :3]
+        
+        # 1. Cluster to remove noise/ground
+        db = DBSCAN(eps=eps, min_samples=min_samples)
+        labels = db.fit_predict(points)
+
+        unique_labels = set(labels)
+        if -1 in unique_labels:
+            unique_labels.remove(-1)
+
+        if not unique_labels:
+            return None 
+
+        # Pick cluster closest to geometric centroid of the selection
+        selection_center = np.mean(points, axis=0)
+        best_cluster_pts = None
+        min_dist = float("inf")
+
+        for lbl in unique_labels:
+            cluster_pts = points[labels == lbl]
+            dist = np.linalg.norm(np.mean(cluster_pts, axis=0) - selection_center)
+            if dist < min_dist:
+                min_dist = dist
+                best_cluster_pts = cluster_pts
+
+        if best_cluster_pts is None:
+            return None
+
+        # Use Open3D for robust OBB fitting
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(best_cluster_pts)
+
+        try:
+            obb = pcd.get_oriented_bounding_box()
+        except RuntimeError:
+            return None  # Degenerate points
+
+        center = obb.center
+        extent = obb.extent # [dx, dy, dz]
+        R_mat = obb.R
+        
+        # Apply script's specific scaling offsets if you want exact parity
+        dx = max(0.1, extent[0] - 0.59)  # Safety: prevent negative size
+        dy = extent[1]
+        dz = extent[2] + 1.17
+        
+        # Calculate yaw (heading) from Rotation Matrix
+        # Heading is rotation around Z.
+        # R = [[cos, -sin, 0], [sin, cos, 0], ..]
+        heading = np.arctan2(R_mat[1, 0], R_mat[0, 0])
+        
+        return {
+            "x": center[0],
+            "y": center[1],
+            "z": center[2],
+            "dx": dx, 
+            "dy": dy,
+            "dz": dz,
+            "heading": heading,
+        }
+
 
     @staticmethod
     def pixel_to_ray(u: float, v: float, K_inv: np.ndarray) -> np.ndarray:
@@ -79,11 +161,10 @@ class GeometryUtils:
         """
         if len(points) == 0:
             return points
-
-        # add 1 for homogenous coords
+        points = points[:, :3]
         N = points.shape[0]
-        points_hom = np.hstack((points, np.ones((N, 1))))  # (N, 4)
-
+        points_hom = np.hstack((points, np.ones((N, 1)))) 
+        
         # Transform: (N, 4) @ (4, 4).T -> (N, 4)
         points_trans = points_hom @ T.T
 
@@ -109,7 +190,7 @@ class GeometryUtils:
         if len(points) == 0:
             return np.zeros(0, dtype=bool)
 
-        # Transform LiDAR points to Camera Frame
+        # Uses transform_points (P @ T.T) which correctly handles Extrinsics
         pts_cam = GeometryUtils.transform_points(points, T_lidar_to_cam)
 
         # Filter points BEHIND the camera (z <= 0)
@@ -144,97 +225,26 @@ class GeometryUtils:
         return final_mask
 
     @staticmethod
-    def fit_box_to_cloud(
-        points: np.ndarray, eps: float = 0.5, min_samples: int = 8
-    ) -> dict:
-        """
-        Clusters points using DBSCAN and fits a box to the largest cluster.
-        Using params from your script: eps=0.5, min_samples=8
-        """
-        if len(points) < 5:
-            return None
-
-        db = DBSCAN(eps=eps, min_samples=min_samples)
-        labels = db.fit_predict(points)
-
-        unique_labels = set(labels)
-        if -1 in unique_labels:
-            unique_labels.remove(-1)  # Remove noise
-
-        if not unique_labels:
-            return None  # Only noise found
-
-        # Heuristic: Pick the cluster closest to the sensor origin (0,0,0)
-        best_cluster_pts = None
-        min_dist = float("inf")
-
-        for lbl in unique_labels:
-            cluster_pts = points[labels == lbl]
-            # Dist to origin
-            dist = np.linalg.norm(np.mean(cluster_pts, axis=0))
-            if dist < min_dist:
-                min_dist = dist
-                best_cluster_pts = cluster_pts
-
-        if best_cluster_pts is None:
-            return None
-
-        # Use Open3D for robust OBB fitting
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(best_cluster_pts)
-
-        try:
-            obb = pcd.get_oriented_bounding_box()
-        except RuntimeError:
-            return None  # Degenerate points
-
-        # Extract params
-        center = obb.center
-        extent = obb.extent
-        R_mat = obb.R
-
-        # Calculate yaw (heading) from Rotation Matrix
-        # Heading is rotation around Z.
-        # R = [[cos, -sin, 0], [sin, cos, 0], ..]
-        heading = np.arctan2(R_mat[1, 0], R_mat[0, 0])
-
-        # Apply your script's specific scaling offsets if you want exact parity
-        dx = max(0.1, extent[0] - 0.59)  # Safety: prevent negative size
-        dy = extent[1]
-        dz = extent[2] + 1.17
-
-        return {
-            "x": center[0],
-            "y": center[1],
-            "z": center[2],
-            "dx": dx,
-            "dy": dy,
-            "dz": dz,
-            "heading": heading,
-        }
-
-    @staticmethod
     def get_points_in_mask(
-        points: np.ndarray, mask: np.ndarray, intr: np.ndarray, camera_pose: np.ndarray
+        points: np.ndarray, mask: np.ndarray, intr: np.ndarray, extrinsic: np.ndarray
     ) -> np.ndarray:
         """
         Selects 3D points that project onto the 'True' pixels of a 2D mask.
         Implements your 'mask_point_indices' logic.
         """
+        # Renamed camera_pose -> extrinsic for clarity
         # Project ALL points to image plane
-        uv, valid = GeometryUtils.project_lidar_to_image(points, camera_pose, intr)
+        uv, valid = GeometryUtils.project_lidar_to_image(points, extrinsic, intr)
         h, w = mask.shape
-
-        # Convert to integer pixels
+        
+        # Convert to integer pixel
         pixel_uv = np.round(uv).astype(int)
 
         # Check Image Bounds (Vectorized)
         # We only check points that were already valid (z > 0)
         in_img_bounds = (
-            (pixel_uv[:, 0] >= 0)
-            & (pixel_uv[:, 0] < w)
-            & (pixel_uv[:, 1] >= 0)
-            & (pixel_uv[:, 1] < h)
+            (pixel_uv[:, 0] >= 0) & (pixel_uv[:, 0] < w) &
+            (pixel_uv[:, 1] >= 0) & (pixel_uv[:, 1] < h)
         )
 
         # Combine: Must be in front of cam AND inside image frame
@@ -265,16 +275,17 @@ class GeometryUtils:
         """
         if points is None or len(points) == 0:
             return np.array([], dtype=int)
-
+        
         # Translate points to Box Frame
+        points = points[:, :3]
         center = np.array([box.x, box.y, box.z])
         pts_local = points - center
-
+        
         # Rotate points to align with Box Axes
         rot_mat = R.from_euler("z", -box.heading).as_matrix()
         pts_aligned = pts_local @ rot_mat.T
 
-        # Check Bounds (Is point inside the box dimensions?)
+       # Check Bounds (Is point inside the box dimensions?)
         half_dx, half_dy, half_dz = box.dx / 2.0, box.dy / 2.0, box.dz / 2.0
 
         mask = (
@@ -287,24 +298,24 @@ class GeometryUtils:
 
     @staticmethod
     def project_box_to_image(
-        box, camera_pose: np.ndarray, intr: np.ndarray, image_shape
+        box, extrinsic: np.ndarray, intr: np.ndarray, image_shape
     ) -> Optional[list[int]]:
         """
         Projects a 3D Box to a 2D Bounding Rect [x, y, w, h] for SAM prompting.
         """
         # Get 8 Corners of the 3D Box
         corners_3d = box.get_corners()
-
+        
         # Project 3D Corners -> 2D Pixels
-        uv, valid = GeometryUtils.project_lidar_to_image(corners_3d, camera_pose, intr)
-
+        uv, valid = GeometryUtils.project_lidar_to_image(corners_3d, extrinsic, intr)
+        
         # If fewer than 4 corners are visible, the object is likely off-screen
         if np.sum(valid) < 4:
             return None
 
         u_valid = uv[valid, 0]
         v_valid = uv[valid, 1]
-
+        
         # Clip to Image Dimensions
         h, w = image_shape[:2]
         
@@ -343,19 +354,17 @@ class GeometryUtils:
         # Normalize diff to [-pi, pi]
         rot_diff = (rot_diff + np.pi) % (2 * np.pi) - np.pi
         heading = box_start.heading + rot_diff * t
-        
-        return {
-            'x': x, 
-            'y': y, 
-            'z': z,
-            'dx': dx, 
-            'dy': dy, 
-            'dz': dz,
-            'heading': heading,
-            'label': box_start.label,    
-            'track_id': box_start.track_id
-        }
-        
+        return {'x': x, 
+                'y': y, 
+                'z': z, 
+                'dx': dx, 
+                'dy': dy, 
+                'dz': dz, 
+                'heading': heading, 
+                'label': box_start.label, 
+                'track_id': box_start.track_id
+                }
+
     @staticmethod
     def refine_heading(points: np.ndarray, current_heading: float) -> float:
         """
@@ -387,8 +396,8 @@ class GeometryUtils:
         evals, evecs = np.linalg.eig(cov)
         
         # evecs are columns. evecs[:, i] corresponds to eval[i]
-        idx = np.argmax(evals)
-        major_axis = evecs[:, idx] # [dx, dy] vector
+        # [dx, dy] vector
+        major_axis = evecs[:, np.argmax(evals)]
         
         # calculate angle from vector
         pca_heading = np.arctan2(major_axis[1], major_axis[0])
@@ -438,8 +447,7 @@ class GeometryUtils:
         
         try:
             # We need to go from Clip Space -> World Space
-            mvp = proj_matrix @ view_matrix
-            inv_mvp = np.linalg.inv(mvp) 
+            inv_mvp = np.linalg.inv(proj_matrix @ view_matrix)
         except np.linalg.LinAlgError:
             return np.zeros(3), np.array([0, 0, 1])
         
@@ -448,11 +456,11 @@ class GeometryUtils:
         res_far = inv_mvp @ clip_far
         
         # perspective divide
-        if res_near[3] != 0:
+        if res_near[3] != 0: 
             res_near /= res_near[3]
-        if res_far[3] != 0:
+        if res_far[3] != 0: 
             res_far /= res_far[3]
-            
+        
         # form ray
         origin = res_near[:3]
         end = res_far[:3]
@@ -461,9 +469,8 @@ class GeometryUtils:
         norm = np.linalg.norm(direction)
         if norm > 1e-16:
             direction /= norm
-            
-        return origin, direction
-    
+        return res_near[:3], direction
+
     @staticmethod
     def intersect_ray_plane(ray_origin: np.ndarray, ray_dir: np.ndarray, plane_z: float = 0.0) -> np.ndarray:
         """
@@ -490,8 +497,7 @@ class GeometryUtils:
         """
         if len(points) < 5:
             return None
-        
-        clustering = DBSCAN(eps=0.5, min_samples=4).fit(points)
+        clustering = DBSCAN(eps=0.5, min_samples=4).fit(points[:, :3])
         all_labels = clustering.labels_
         unique_labels = set(all_labels) - {-1}
         if not unique_labels:
