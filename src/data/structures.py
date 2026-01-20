@@ -13,12 +13,14 @@ class CameraConfig:
     image_path: Path
     intrinsics_path: Optional[Path] = None
     extrinsics_path: Optional[Path] = None
+    
 @dataclass(frozen=True)
 class SensorConfig:
     lidar_path: Path
     cameras: List[CameraConfig]
     ext_img: str = ".png"
     ext_lidar: str = ".pcd"
+    extra_params: Dict[str, Any] = field(default_factory=dict)
     
 @dataclass
 class FrameData:

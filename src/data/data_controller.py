@@ -14,33 +14,62 @@ class DataController:
         self._init_loader()
         
     def _init_loader(self):
-        setup = self.cfg.msalt_setup
-        
-        camera_configs_list = []
-        if 'cameras' in setup.paths:
-            for cam_yaml in setup.paths.cameras:
-                intrin = Path(cam_yaml.intrinsics) if 'intrinsics' in cam_yaml else None
-                extrin = Path(cam_yaml.extrinsics) if 'extrinsics' in cam_yaml else None
-                
-                c_cfg = CameraConfig(
-                    id=cam_yaml.id,
-                    name=cam_yaml.name,
-                    image_path=Path(cam_yaml.image_folder),
-                    intrinsics_path=intrin,
-                    extrinsics_path=extrin
-                )
-                camera_configs_list.append(c_cfg)
+        if hasattr(self.cfg, 'msalt_setup') and 'dataset_type' in self.cfg.msalt_setup:
+             dtype = self.cfg.msalt_setup.dataset_type
         else:
-            # Fallback or error if no cameras defined
-            logger.warning("No 'cameras' list found in sensor_setup paths.")
+             dtype = "custom" # Fallback to existing logic
+             
+        if dtype == "nuscenes":
+            from src.data.loaders.nuscenes_loader import NuScenesLoader
+            
+            # Map Config Paths
+            setup = self.cfg.msalt_setup
+            root_path = Path(setup.paths.root_dir)
+            version = getattr(setup, 'version', 'v1.0-mini')
+            
+            # Store root in 'lidar_path' slot of SensorConfig structure
+            sensor_cfg = SensorConfig(
+                lidar_path=root_path,
+                cameras=[], # Handled internally by loader
+                ext_img=setup.extensions.images,
+                ext_lidar=setup.extensions.lidar,
+                extra_params={
+                    "version": getattr(setup, 'version', 'v1.0-mini'),
+                    "sweeps": getattr(setup, 'sweeps', 10),  # Accumulate 10 sweeps for dense view
+                    "scenes": getattr(setup.paths, 'scenes', [])
+                }
+            )
+            self.loader = NuScenesLoader(sensor_cfg)
+            logger.info(f"Loaded NuScenes Loader: {version}")
+            
+        else:
+            setup = self.cfg.msalt_setup
+            
+            camera_configs_list = []
+            if 'cameras' in setup.paths:
+                for cam_yaml in setup.paths.cameras:
+                    intrin = Path(cam_yaml.intrinsics) if 'intrinsics' in cam_yaml else None
+                    extrin = Path(cam_yaml.extrinsics) if 'extrinsics' in cam_yaml else None
+                    
+                    c_cfg = CameraConfig(
+                        id=cam_yaml.id,
+                        name=cam_yaml.name,
+                        image_path=Path(cam_yaml.image_folder),
+                        intrinsics_path=intrin,
+                        extrinsics_path=extrin
+                    )
+                    camera_configs_list.append(c_cfg)
+            else:
+                # Fallback or error if no cameras defined
+                logger.warning("No 'cameras' list found in sensor_setup paths.")
 
-        sensor_cfg = SensorConfig(
-            lidar_path=Path(setup.paths.lidar_folder),
-            cameras=camera_configs_list,
-            ext_img=setup.extensions.images,
-            ext_lidar=setup.extensions.lidar
-        )
-        self.loader = RealSenseLoader(sensor_cfg)
+            sensor_cfg = SensorConfig(
+                lidar_path=Path(setup.paths.lidar_folder),
+                cameras=camera_configs_list,
+                ext_img=setup.extensions.images,
+                ext_lidar=setup.extensions.lidar
+            )
+            self.loader = RealSenseLoader(sensor_cfg)
         
     def get_total_frames(self) -> int:
         return len(self.loader) if self.loader else 0
