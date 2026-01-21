@@ -1,4 +1,3 @@
-from ast import Dict
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
