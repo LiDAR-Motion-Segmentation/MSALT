@@ -104,24 +104,24 @@ class NuScenesLoader(BaseDatasetLoader):
             # Apply Rotation/Translation
             # T_sensor_to_ego is (4,4) matrix
             # Box center:
-            center = np.array([box.center[0], box.center[1], box.center[2], 1.0])
-            center_ego = T_sensor_to_ego @ center
+            # center = np.array([box.center[0], box.center[1], box.center[2], 1.0])
+            # center_ego = T_sensor_to_ego @ center
             
-            # Box Orientation:
-            calib = self.nusc.get('calibrated_sensor', self.nusc.get('sample_data', lidar_token)['calibrated_sensor_token'])
-            rot_quat = Quaternion(calib['rotation'])
-            new_orientation = rot_quat * box.orientation
+            # # Box Orientation:
+            # calib = self.nusc.get('calibrated_sensor', self.nusc.get('sample_data', lidar_token)['calibrated_sensor_token'])
+            # rot_quat = Quaternion(calib['rotation'])
+            # new_orientation = rot_quat * box.orientation
             
             # Calculate Yaw (Heading) from Quaternion
             # Nuscenes Yaw is usually around Z-axis
-            v = np.dot(new_orientation.rotation_matrix, np.array([1, 0, 0]))
+            v = np.dot(box.orientation.rotation_matrix, np.array([1, 0, 0]))
             heading = np.arctan2(v[1], v[0])
             
             # Create YOUR BoundingBox3D
             b = BoundingBox3D(
-                x=center_ego[0], 
-                y=center_ego[1], 
-                z=center_ego[2],
+                x=box.center[0], 
+                y=box.center[1], 
+                z=box.center[2],
                 dx=box.wlh[1], # NuScenes is w, l, h -> dx(len), dy(wid), dz(hgt)
                 dy=box.wlh[0], # Map L->dx, W->dy carefully. NuScenes often swaps these relative to Kitti.
                 dz=box.wlh[2],
@@ -176,53 +176,6 @@ class NuScenesLoader(BaseDatasetLoader):
                 'gt_boxes': gt_boxes
             }
         )
-        
-    def _get_cloud_robust(self, key_token: str, nsweeps: int = 1):
-        """
-        Attempts to load multi-sweep cloud. If 0 points, falls back to single sweep.
-        """
-        key_data = self.nusc.get('sample_data', key_token)
-        calib = self.nusc.get('calibrated_sensor', key_data['calibrated_sensor_token'])
-        T_sensor_to_ego = transform_matrix(calib['translation'], Quaternion(calib['rotation']))
-
-        pc = None
-        
-        # Try Multi-Sweep
-        try:
-            pc, _ = LidarPointCloud.from_file_multisweep(
-                self.nusc, sample_rec=self.nusc.get('sample', key_data['sample_token']), 
-                chan='LIDAR_TOP', ref_chan='LIDAR_TOP', nsweeps=nsweeps, min_distance=1.0
-            )
-        except Exception as e:
-            logger.warning(f"Multi-sweep failed: {e}")
-
-        # Fallback if empty or failed
-        if pc is None or pc.points.shape[1] == 0:
-            logger.warning("Multi-sweep returned 0 points. Falling back to single-sweep.")
-            pcl_path = Path(self.root) / key_data['filename']
-            try:
-                pc = LidarPointCloud.from_file(str(pcl_path))
-            except Exception as e:
-                logger.error(f"Single-sweep failed: {e}")
-                return np.zeros((0, 4)), T_sensor_to_ego
-
-        # Transform to Ego
-        # pc.points is (C, N) where C is usually 4 or 5
-        xyz = pc.points[:3, :]
-        
-        # Handle intensity (row 3) safely
-        if pc.points.shape[0] >= 4:
-            i = pc.points[3, :]
-        else:
-            i = np.zeros(xyz.shape[1]) # Default intensity if missing
-
-        xyz_h = np.vstack((xyz, np.ones((1, xyz.shape[1]))))
-        xyz_ego = T_sensor_to_ego @ xyz_h
-        
-        points_ego = np.vstack((xyz_ego[:3, :], i)).T
-        
-        logger.info(f"Loaded {points_ego.shape[0]} points.") 
-        return points_ego, T_sensor_to_ego
     
     def _get_single_sweep_strict(self, key_token: str):
         """
@@ -250,54 +203,6 @@ class NuScenesLoader(BaseDatasetLoader):
         
         points_ego = np.vstack((xyz_ego[:3, :], i)).T
         return points_ego, T_sensor_to_ego
-
-    def _get_accumulated_cloud_ego(self, key_token: str, nsweeps: int = 1):
-        """
-        Returns (N, 4) points in Ego Frame AND the Transform Matrix used.
-        """
-        key_data = self.nusc.get('sample_data', key_token)
-        ref_chan = 'LIDAR_TOP'
-        
-        # Use NuScenes built-in helper to do the heavy lifting of synchronization
-        # from_file_multisweep transforms all sweeps to the reference sensor frame
-        # using ego pose transformations, then returns points in SENSOR frame
-        pc, _ = LidarPointCloud.from_file_multisweep(
-            self.nusc, sample_rec=self.nusc.get('sample', key_data['sample_token']), 
-            chan=ref_chan, ref_chan=ref_chan, nsweeps=nsweeps, min_distance=1.0
-        )
-        
-        # PC is now (4, N) in the SENSOR frame.
-        # We must transform Sensor -> Ego.
-        
-        calib = self.nusc.get('calibrated_sensor', key_data['calibrated_sensor_token'])
-        T_sensor_to_ego = transform_matrix(
-            calib['translation'], 
-            Quaternion(calib['rotation'])
-        )
-        
-        # Apply Transform
-        # pc.points is (4, N) [x, y, z, i]
-        # We treat it as homogenous [x, y, z, 1] for transform, then restore intensity
-        
-        xyz = pc.points[:3, :] # (3, N)
-        intensity = pc.points[3, :] # (1, N)
-        
-        # Add 1 for homogenous
-        xyz_h = np.vstack((xyz, np.ones((1, xyz.shape[1])))) # (4, N)
-        
-        # Transform Sensor -> Ego
-        xyz_ego = T_sensor_to_ego @ xyz_h # (4, N)
-        
-        # Remove duplicate points that might cause Y-axis overlap
-        # If there's overlap, it's likely due to ego pose transformations in multisweep
-        # For now, we'll use the transformed points directly
-        # If overlap persists, consider using nsweeps=1 or filtering by distance
-        
-        # Stack back: x, y, z (ego), intensity
-        points_ego = np.vstack((xyz_ego[:3, :], intensity)).T
-        
-        # Return (N, 4)
-        return points_ego.T, T_sensor_to_ego
     
     @property
     def calibration(self):
