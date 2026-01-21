@@ -40,7 +40,7 @@ class InspectorWidget(QWidget):
         self.spin_id.valueChanged.connect(self._on_change)
 
         self.combo_cls = QComboBox()
-        self.combo_cls.addItems(["moving_people", "static_people", "unkown"])
+        self.combo_cls.addItems(["moving_people", "static_people", "unkown", "moving_car", "static_car"])
         self.combo_cls.currentTextChanged.connect(self._on_change)
 
         form_id.addRow("Track ID:", self.spin_id)
