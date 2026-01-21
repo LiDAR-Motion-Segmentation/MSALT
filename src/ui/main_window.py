@@ -105,7 +105,7 @@ class MainWindow(QMainWindow):
         self.list_panel.box_deleted.connect(self.on_box_deleted)
 
         # RIGHT: Inspector 
-        self.inspector = InspectorWidget()
+        self.inspector = InspectorWidget(label_config=self.labels_cfg)
         self.add_dock(
             self.inspector, "Inspector", Qt.DockWidgetArea.RightDockWidgetArea
         )
