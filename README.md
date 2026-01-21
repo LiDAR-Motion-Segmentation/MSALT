@@ -247,3 +247,30 @@ xhost +local:docker
 - **Enter the container**
     - Open Command Pallete with `Ctrl+Shift+P`
     - Select **Dev Containers: Rebuild and Reopen in Container**
+
+# NuScenes dataset Benchmarking
+- Alot of modifications were required to have Nuscenes dataset on this tool as per benchmarking requests
+- a seperate branch exists called `perf/nuscenes` where the code changes for Nuscenes exists
+- a seperate config exits called `nuscenes.yaml` where you can choose the paths and the sequence
+```
+name: "nuscenes_mini"
+
+dataset_type: "nuscenes"
+version: "v1.0-mini"
+
+paths:
+  # The root folder containing 'samples', 'sweeps', 'maps', 'v1.0-mini'
+  root_dir: "/home/Downloads/v1.0-mini"
+  scenes: [1]
+
+extensions:
+  images: ".jpg"
+  lidar: ".pcd.bin"
+```
+- to try it out use the steps below
+```
+git checkout perf/nuscenes
+uv sync
+uv run main.py
+```
+![alt text](./assets/nuscenes.png)
