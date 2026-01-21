@@ -10,6 +10,7 @@ from src.data.structures import FrameData
 from src.core.objects import BoundingBox3D
 from src.core.geometry import GeometryUtils
 from typing import List, Dict
+from PyQt6.QtWidgets import QCheckBox, QHBoxLayout
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,11 @@ class CustomGLWidget(gl.GLViewWidget):
         self.ghost_box.setVisible(False)
         self.addItem(self.ghost_box)
         
+        # This helps confirm if your Lidar is rotated correctly.
+        axis = gl.GLAxisItem()
+        axis.setSize(3, 3, 3)
+        self.addItem(axis)
+        
     def _get_matrices_np(self):
         """Helper to extract OpenGL matrices as Numpy arrays."""
         # View Matrix (World -> Camera)
@@ -83,9 +89,12 @@ class CustomGLWidget(gl.GLViewWidget):
                 if self.state == DrawState.IDLE:
                     vm, pm = self._get_matrices_np()
                     origin, direction = GeometryUtils.screen_to_ray(
-                        event.pos().x(), event.pos().y(),
-                        self.width(), self.height(),
-                        vm, pm 
+                        event.pos().x(), 
+                        event.pos().y(),
+                        self.width(), 
+                        self.height(),
+                        vm, 
+                        pm 
                     )
                     
                     hit = GeometryUtils.intersect_ray_plane(origin, direction, self.ground_z)
@@ -114,8 +123,10 @@ class CustomGLWidget(gl.GLViewWidget):
         if self.state == DrawState.DRAGGING_BASE:
             vm, pm = self._get_matrices_np()
             origin, direction = GeometryUtils.screen_to_ray(
-                event.pos().x(), event.pos().y(),
-                self.width(), self.height(),
+                event.pos().x(), 
+                event.pos().y(),
+                self.width(), 
+                self.height(),
                 vm, pm
             )
             
@@ -126,12 +137,10 @@ class CustomGLWidget(gl.GLViewWidget):
                 self._update_ghost_box()
                 
         elif self.state == DrawState.SETTING_HEIGHT:
-            # Update Height (Visual only)
-            # We map vertical mouse movement to Z height
-            # Simple heuristic: 100 pixels = 2 meters
-            # Ideally we track delta from mouseRelease, but absolute Y works for now
-            pass
-            # (Refinement: We can implement pixel-delta logic here if needed)
+            dy = self.height() - event.pos().y() # Invert Y
+            # Map screen Y to a reasonable height (0 to 5m)
+            self.draw_height = max(0.5, (dy / 100.0))
+            self._update_ghost_box()
         
         super().mouseMoveEvent(event)
     
@@ -240,6 +249,10 @@ class LidarVisualizer(BasePluginWidget):
         self.debug_items = []
         self.label_color_map = {}
         self.current_points = None
+        self.current_metadata = {} # Cache for colors
+        self.show_gt_boxes = False
+        self.gt_box_items = [] # For GT boxes (Visual only)
+        self.gt_box_cache = [] # List[BoundingBox3D]
         
     def set_label_colors(self, label_config: List[Dict]):
         """
@@ -257,26 +270,217 @@ class LidarVisualizer(BasePluginWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.view_widget = CustomGLWidget()
-        self.view_widget.opts["distance"] = 20
-        self.view_widget.setWindowTitle("LiDAR Viewer")
+        
+        toolbar = QHBoxLayout()
+        
+        # COMPARISON CHECKBOX
+        self.chk_compare = QCheckBox("Compare Ground Truth")
+        self.chk_compare.setStyleSheet("color: #FF00FF; font-weight: bold;") # Magenta Text
+        self.chk_compare.toggled.connect(self.toggle_comparison)
+        toolbar.addWidget(self.chk_compare)
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
 
+        self.view_widget.opts["distance"] = 40
+        self.view_widget.setCameraPosition(elevation=30, azimuth=-90)
+        
         # grid
         grid = gl.GLGridItem()
-        grid.setSize(x=50, y=50, z=1)
+        grid.setSize(60, 60, 1)
         self.view_widget.addItem(grid)
-
-        # Scatter Plot (The Point Cloud)
+        
         self.scatter = gl.GLScatterPlotItem()
+        self.scatter.setGLOptions('additive')
         self.view_widget.addItem(self.scatter)
 
         layout.addWidget(self.view_widget)
 
     def on_frame_update(self, data: FrameData) -> None:
         if data.point_cloud is not None:
+            # Safety Slice for (N, 4) -> (N, 3)
             self.current_points = data.point_cloud  # (N, 3)
+            self.current_metadata = data.metadata # Save for GT access
             
-            if not self.view_widget.overlay_boxes:
-                self._draw_points_default()
+            # Cache GT Boxes if available
+            self.gt_boxes_cache = data.metadata.get("gt_boxes", [])
+            
+            # Enable checkbox only if GT exists
+            self.chk_compare.setEnabled(len(self.gt_boxes_cache) > 0)
+            if not self.gt_boxes_cache:
+                self.chk_compare.setChecked(False)
+            
+            # 1. Restore Original Coloring (Height Gradient)
+            self._draw_points_gradient()
+            
+            # 2. Redraw GT overlays if active
+            if self.show_gt_boxes:
+                self._draw_gt_overlays()
+                
+            # Initial Draw
+            self.update_boxes(self.view_widget.overlay_boxes)
+                
+    def _draw_points_gradient(self):
+        if self.current_points is None or len(self.current_points) == 0: 
+            return
+            
+        pts = self.current_points[:, :3]
+        z = pts[:, 2]
+        
+        # Color Logic: Blue (-2m) -> Cyan (0m) -> White (+3m)
+        norm = np.clip((z + 2.0) / 5.0, 0, 1)
+        
+        colors = np.zeros((len(pts), 4))
+        colors[:, 0] = 0.0              
+        colors[:, 1] = norm * 0.9       
+        colors[:, 2] = 0.6 + norm*0.4   
+        
+        # FIX: Force Alpha to 1.0 (Fully Opaque) for visibility check
+        colors[:, 3] = 1.0              
+        
+        # Use pxMode=True for performant dots
+        self.scatter.setData(pos=pts, color=colors, size=3, pxMode=True)
+            
+    def _update_point_cloud(self):
+        if self.current_points is None: 
+            return
+        
+        points_xyz = self.current_points[:, :3] # Slice XYZ
+        num_pts = len(points_xyz)
+        
+        # Default: "NuScenes Blue" Style (Height Gradient)
+        # Deep Blue (-2m) -> Cyan (0m) -> White (+3m)
+        z = points_xyz[:, 2]
+        
+        # Create gradient 0.0 -> 1.0
+        # Assuming ground is -1.8, roof is 0.0, trees/signs are +2.0
+        norm_z = np.clip((z + 2.0) / 4.0, 0, 1) 
+        
+        colors = np.zeros((num_pts, 4), dtype=np.float32)
+        colors[:, 0] = norm_z * 0.2        # Low Red
+        colors[:, 1] = norm_z * 0.8        # High Green (Cyan-ish)
+        colors[:, 2] = 0.8 + (norm_z * 0.2)# High Blue
+        colors[:, 3] = 0.8                 # Alpha (Slightly transparent)
+
+        # Override with GT if active
+        if self.show_gt:
+            gt = self.current_metadata.get('gt_colors')
+            if gt is not None and len(gt) == num_pts:
+                colors = gt
+        
+        self.scatter.setData(pos=points_xyz, color=colors, size=2, pxMode=True)
+        
+    def update_boxes(self, user_boxes):
+        """Draws USER boxes (Green/Yellow)."""
+        self.view_widget.overlay_boxes = user_boxes
+        
+        # 1. Update Box Wireframes (User)
+        for item in self.box_items:
+            self.view_widget.removeItem(item)
+        self.box_items.clear()
+        
+        for box in user_boxes:
+            self._draw_box_item(box, is_gt=False)
+
+        # 2. Update Box Wireframes (GT)
+        if self.show_gt_boxes:
+            # Clear old GT items first if needed (usually handled in toggle)
+            pass 
+        else:
+             # If GT is off, ensure no GT items
+             for item in self.gt_box_items:
+                 self.view_widget.removeItem(item)
+             self.gt_box_items.clear()
+
+        # 3. REPAINT POINTS (The "Trigger" you asked for)
+        if self.current_points is not None:
+            pts = self.current_points[:, :3]
+            z = pts[:, 2]
+            
+            # Base Color (Blue Gradient)
+            norm = np.clip((z + 2.0) / 5.0, 0, 1)
+            colors = np.zeros((len(pts), 4))
+            colors[:, 0] = 0.0
+            colors[:, 1] = norm * 0.9       # Cyan
+            colors[:, 2] = 0.6 + norm*0.4   # Blue
+            colors[:, 3] = 1.0              # Opaque
+            
+            # A. Highlight USER Boxes (Green/Yellow)
+            for box in user_boxes:
+                target_color = self.label_color_map.get(box.label, (0.0, 1.0, 0.0, 1.0))
+                if box.selected: 
+                    target_color = (1.0, 1.0, 0.0, 1.0)
+                
+                indices = GeometryUtils.get_points_in_box(self.current_points, box)
+                if len(indices) > 0:
+                    colors[indices] = target_color
+
+            # B. Highlight GT Boxes (Magenta) - IF ENABLED
+            if self.show_gt_boxes:
+                for gt_box in self.gt_boxes_cache:
+                    indices = GeometryUtils.get_points_in_box(self.current_points, gt_box)
+                    if len(indices) > 0:
+                        # Bright Magenta for points inside GT
+                        colors[indices] = (1.0, 0.0, 1.0, 1.0) 
+
+            self.scatter.setData(pos=pts, color=colors, size=3, pxMode=True)
+            
+    def _draw_gt_overlays(self):
+        """Draws GT boxes (Magenta/Purple)."""
+        # Clear old GT items
+        for item in self.gt_box_items:
+            self.view_widget.removeItem(item)
+        self.gt_box_items.clear()
+        
+        for box in self.gt_boxes_cache:
+            self._draw_box_item(box, is_gt=True)
+    
+    def _draw_box_item(self, box, is_gt=False):
+        corners = box.get_corners()
+        lines = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]]
+        pts = []
+        for s, e in lines:
+            pts.append(corners[s])
+            pts.append(corners[e])
+            
+        # Color Logic
+        if is_gt:
+            color = (1.0, 0.0, 1.0, 0.8) # Magenta for Ground Truth
+            width = 1
+        else:
+            color = box.color # Green/Yellow (Selected)
+            width = 2
+            
+        item = gl.GLLinePlotItem(pos=np.array(pts), mode='lines', color=color, width=width, antialias=True)
+        self.view_widget.addItem(item)
+        # trigger a repaint to draw the next text
+        # self.view_widget.update()
+        
+        if is_gt:
+            self.gt_box_items.append(item)
+        else:
+            self.box_items.append(item)
+
+    def toggle_comparison(self, checked):
+        self.show_gt_boxes = checked
+       
+        # 1. Handle Wireframes
+        if checked:
+            # Clear any old ones first
+            for item in self.gt_box_items:
+                self.view_widget.removeItem(item)
+            self.gt_box_items.clear()
+            
+            # Draw new ones
+            for box in self.gt_boxes_cache:
+                self._draw_box_item(box, is_gt=True)
+        else:
+            # Remove all
+            for item in self.gt_box_items:
+                self.view_widget.removeItem(item)
+            self.gt_box_items.clear()
+            
+        # 2. Handle Point Repaint
+        self.update_boxes(self.view_widget.overlay_boxes)
             
     def _draw_points_default(self):
         """Standard Z-height gradient."""
@@ -288,81 +492,6 @@ class LidarVisualizer(BasePluginWidget):
         colors[:, 0] = np.clip((z + 2.0) / 5.0, 0, 1) 
         colors[:, 1] = 0.5
         self.scatter.setData(pos=self.current_points, color=colors, size=2)
-
-    def update_boxes(self, boxes: list[BoundingBox3D]):
-        self.view_widget.overlay_boxes = boxes
-        
-        # clear old boxes
-        for item in self.box_items:
-            self.view_widget.removeItem(item)
-        self.box_items.clear()
-
-        # Re-Color Point Cloud (Highlight Selected Points)
-        if self.current_points is not None:
-            # Reset to default colors first
-            points = self.current_points
-            z = self.current_points[:, 2]
-            colors = np.ones((len(z), 4))
-            colors[:, 0] = np.clip((z + 2) / 5, 0, 1)
-            colors[:, 1] = 0.5
-
-            for box in boxes:
-                target_color = self.label_color_map.get(box.label, (0.0, 1.0, 0.0, 1.0))
-
-                indices = GeometryUtils.get_points_in_box(points, box)
-                    
-                if len(indices) > 0:
-                    colors[indices] = target_color
-                    # box.color = target_color
-
-            # Update the scatter plot
-            self.scatter.setData(pos=points, color=colors, size=2)
-
-        # Draw new box lines
-        # Connectivity for a cube wireframe (lines between corner indices)
-        # Corners are 0-7.
-        lines_indices = np.array(
-            [
-                [0, 1],
-                [1, 2],
-                [2, 3],
-                [3, 0],  # Bottom face
-                [4, 5],
-                [5, 6],
-                [6, 7],
-                [7, 4],  # Top face
-                [0, 4],
-                [1, 5],
-                [2, 6],
-                [3, 7],  # Vertical pillars
-            ]
-        )
-
-        for box in boxes:
-            corners = box.get_corners()  # (8, 3)
-
-            # GLLinePlotItem usually takes a list of points in sequence for 'lines' mode
-            # Construct line pairs manually for GLLinePlotItem to be safe
-            pts = []
-            for start, end in lines_indices:
-                pts.append(corners[start])
-                pts.append(corners[end])
-
-            pts: np.ndarray = np.array(pts)
-
-            # create line item
-            line_item = gl.GLLinePlotItem(
-                pos=pts, 
-                mode="lines", 
-                color=box.color, 
-                width=2, 
-                antialias=True
-            )
-            self.view_widget.addItem(line_item)
-            self.box_items.append(line_item)
-            
-        # trigger a repaint to draw the next text
-        self.view_widget.update()
 
     def reset(self):
         self.scatter.setData(pos=np.zeros((0, 3)))
