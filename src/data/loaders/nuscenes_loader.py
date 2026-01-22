@@ -93,39 +93,53 @@ class NuScenesLoader(BaseDatasetLoader):
         # If you need dense clouds, consider implementing point deduplication or filtering
         points, T_sensor_to_ego = self._get_single_sweep_strict(lidar_token)
         
+        # Get ego pose for transforming boxes from global to ego frame
+        lidar_data = self.nusc.get('sample_data', lidar_token)
+        ego_pose = self.nusc.get('ego_pose', lidar_data['ego_pose_token'])
+        # Ego pose transform: Global -> Ego (inverse of ego pose in global)
+        T_ego_to_global = transform_matrix(
+            ego_pose['translation'],
+            Quaternion(ego_pose['rotation'])
+        )
+        T_global_to_ego = np.linalg.inv(T_ego_to_global)
+        
         #  LOAD GROUND TRUTH 
         gt_boxes = []
+        # NuScenes boxes from get_boxes() are in GLOBAL frame
         raw_boxes = self.nusc.get_boxes(lidar_token)
         
         for box in raw_boxes:
-            # box is a NuScenes Box object in SENSOR frame.
-            # We must transform it to EGO frame to match the point cloud.
+            # Transform box from global to ego frame to match the point cloud
             
-            # Apply Rotation/Translation
-            # T_sensor_to_ego is (4,4) matrix
-            # Box center:
-            # center = np.array([box.center[0], box.center[1], box.center[2], 1.0])
-            # center_ego = T_sensor_to_ego @ center
+            # Transform center: Global -> Ego
+            center_global = np.array([box.center[0], box.center[1], box.center[2], 1.0])
+            center_ego_h = T_global_to_ego @ center_global
+            center_ego = center_ego_h[:3]
             
-            # # Box Orientation:
-            # calib = self.nusc.get('calibrated_sensor', self.nusc.get('sample_data', lidar_token)['calibrated_sensor_token'])
-            # rot_quat = Quaternion(calib['rotation'])
-            # new_orientation = rot_quat * box.orientation
+            # Transform orientation: Global -> Ego
+            # Get rotation matrix from global to ego
+            R_global_to_ego = T_global_to_ego[:3, :3]
+            # Transform the box's orientation quaternion
+            # Box orientation in global frame
+            box_quat_global = box.orientation
+            # Convert to rotation matrix, transform, then back to heading
+            box_R_global = box_quat_global.rotation_matrix
+            box_R_ego = R_global_to_ego @ box_R_global
             
-            # Calculate Yaw (Heading) from Quaternion
-            # Nuscenes Yaw is usually around Z-axis
-            v = np.dot(box.orientation.rotation_matrix, np.array([1, 0, 0]))
-            heading = np.arctan2(v[1], v[0])
+            # Extract heading (yaw) from transformed rotation matrix
+            # Forward direction in ego frame
+            forward_ego = box_R_ego @ np.array([1.0, 0.0, 0.0])
+            heading = np.arctan2(forward_ego[1], forward_ego[0])
             
-            # Create YOUR BoundingBox3D
+            # Create BoundingBox3D in EGO frame
             b = BoundingBox3D(
-                x=box.center[0], 
-                y=box.center[1], 
-                z=box.center[2],
-                dx=box.wlh[1], # NuScenes is w, l, h -> dx(len), dy(wid), dz(hgt)
-                dy=box.wlh[0], # Map L->dx, W->dy carefully. NuScenes often swaps these relative to Kitti.
-                dz=box.wlh[2],
-                heading=heading,
+                x=float(center_ego[0]), 
+                y=float(center_ego[1]), 
+                z=float(center_ego[2]),
+                dx=float(box.wlh[1]), # NuScenes w,l,h -> dx(len), dy(wid), dz(hgt)
+                dy=float(box.wlh[0]), # Map L->dx, W->dy carefully. NuScenes often swaps these relative to Kitti.
+                dz=float(box.wlh[2]),
+                heading=float(heading),
                 label=box.name, # e.g. 'vehicle.car'
                 confidence=1.0
             )
