@@ -128,6 +128,12 @@ defaults:
 ## Architecture
 ![alt text](./assets/flowchart_v3.png)
 
+## Algorithmic Math behind the tool
+- 2D-3D back projection math
+
+
+![alt text](./assets/math.png)
+
 ## Directory Structure
 - MSALT follows a modular `Model-View-Controller (MVC)` pattern to separate UI logic from geometric processing.
 ```
