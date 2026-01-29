@@ -130,7 +130,7 @@ defaults:
 
 ## Algorithmic Math behind the tool
 - 2D-3D back projection math
-
+- Attaching link of the slide deck with in-depth math review and analysis [slides](https://docs.google.com/presentation/d/1bkxz266cf_2n2TrYOkVyRwoABM5PNmgjnWyLDB4iWXU/edit?usp=sharing)
 
 ![alt text](./assets/math.png)
 
@@ -254,7 +254,7 @@ xhost +local:docker
     - Open Command Pallete with `Ctrl+Shift+P`
     - Select **Dev Containers: Rebuild and Reopen in Container**
 
-# NuScenes dataset Benchmarking
+## NuScenes dataset Benchmarking
 - Alot of modifications were required to have Nuscenes dataset on this tool as per benchmarking requests
 - a seperate branch exists called `perf/nuscenes` where the code changes for Nuscenes exists
 - a seperate config exits called `nuscenes.yaml` where you can choose the paths and the sequence
@@ -280,3 +280,43 @@ uv sync
 uv run main.py
 ```
 ![alt text](./assets/nuscenes.png)
+
+## Acknowledgement
+- I would like to thank my advisor [Dr. K. Madhava Krishna](https://madhavak-iiith.github.io/), IIIT Hyderabad for guiding me through this project and also my collaborators for advice
+- I have taken a lot of ideas from [SALT](https://github.com/anuragxel/salt) , [SUSTechpoints](https://github.com/naurril/SUSTechPOINTS), [SematicKITTI_LABLER](https://github.com/jbehley/point_labeler) open source tools.
+
+## Citation
+```
+@article{ravi2024sam2,
+  title={SAM 2: Segment Anything in Images and Videos},
+  author={Ravi, Nikhila and Gabeur, Valentin and Hu, Yuan-Ting and Hu, Ronghang and Ryali, Chaitanya and Ma, Tengyu and Khedr, Haitham and R{\"a}dle, Roman and Rolland, Chloe and Gustafson, Laura and Mintun, Eric and Pan, Junting and Alwala, Kalyan Vasudev and Carion, Nicolas and Wu, Chao-Yuan and Girshick, Ross and Doll{\'a}r, Piotr and Feichtenhofer, Christoph},
+  journal={arXiv preprint arXiv:2408.00714},
+  url={https://arxiv.org/abs/2408.00714},
+  year={2024}
+}
+
+@INPROCEEDINGS{9304562,
+  author={Li, E and Wang, Shuaijun and Li, Chengyang and Li, Dachuan and Wu, Xiangbin and Hao, Qi},
+  booktitle={2020 IEEE Intelligent Vehicles Symposium (IV)}, 
+  title={SUSTech POINTS: A Portable 3D Point Cloud Interactive Annotation Platform System}, 
+  year={2020},
+  volume={},
+  number={},
+  pages={1108-1115},
+  doi={10.1109/IV47402.2020.9304562}
+  } 
+
+@article{wang2025salt,
+  title={SALT: A Flexible Semi-Automatic Labeling Tool for General LiDAR Point Clouds with Cross-Scene Adaptability and 4D Consistency},
+  author={Wang, Yanbo and Chen, Yongtao and Cao, Chuan and Deng, Tianchen and Zhao, Wentao and Wang, Jingchuan and Chen, Weidong},
+  journal={arXiv preprint arXiv:2503.23980},
+  year={2025}
+}
+
+@inproceedings{behley2019iccv,
+  author = {J. Behley and M. Garbade and A. Milioto and J. Quenzel and S. Behnke and C. Stachniss and J. Gall},
+  title = {{SemanticKITTI: A Dataset for Semantic Scene Understanding of LiDAR Sequences}},
+  booktitle = {Proc. of the IEEE/CVF International Conf.~on Computer Vision (ICCV)},
+  year = {2019}
+}
+```
