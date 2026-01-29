@@ -1,10 +1,10 @@
 segmentation:
   name: "SAM2"
-  weights: "sam2_b.pt"
+  weights: "sam2_l.pt"
   device: "cuda"
   conf_threshold: 0.5
 
 tracking:
   name: "SAM2-tracking"
-  weights: "sam2_b.pt"
+  weights: "sam2_l.pt"
   conf_threshold: 0.5
