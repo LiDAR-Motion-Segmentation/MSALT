@@ -33,6 +33,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
 # on terminal in the root of the folder
+chmod +x msalt
 ./msalt
 
 # or use to run with uv
