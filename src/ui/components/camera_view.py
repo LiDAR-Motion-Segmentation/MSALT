@@ -1,14 +1,14 @@
 from typing import List, Dict
 import numpy as np
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QVBoxLayout, QScrollArea
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QVBoxLayout, QScrollArea, QSizePolicy
+from PyQt6.QtCore import Qt, pyqtSignal, QRect
+from PyQt6.QtGui import QImage, QPixmap, QPainter, QColor, QPen
 
 from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
 from src.ui.components.drawable_label import DrawableLabel
 from src.core.objects import BoundingBox3D
-
+        
 class CameraStripWidget(BasePluginWidget):
 
     # New Signal: (CameraID, x, y, w, h)
@@ -45,6 +45,7 @@ class CameraStripWidget(BasePluginWidget):
             # Title
             lbl_title = QLabel(cam_id)
             lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_title.setStyleSheet("font-weight: bold; color: #ccc;")
 
             # Image Placeholder
             lbl_img = DrawableLabel()
@@ -52,9 +53,10 @@ class CameraStripWidget(BasePluginWidget):
                 lbl_img.set_label_colors(self.label_config)
             lbl_img.set_camera_id(cam_id)
             lbl_img.setStyleSheet("background-color: #111; border: 1px solid #444;")
-            lbl_img.setMinimumSize(320, 240)
+            lbl_img.setMinimumSize(320, 180)
             lbl_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl_img.setScaledContents(True)
+            lbl_img.setScaledContents(False)
+            lbl_img.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
             lbl_img.selection_finished.connect(
                 lambda x, y, w, h, cid=cam_id: self.box_drawn.emit(cid, x, y, w, h)
