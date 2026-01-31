@@ -1,7 +1,5 @@
 #!/bin/bash
-# Get the directory where this script is located
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-# Run main.py using the .venv python interpreter
-# "$@" passes any arguments you type (like --help or hydra overrides) to python
+source "$DIR/.venv/bin/activate"
 "$DIR/.venv/bin/python" "$DIR/main.py" "$@"
