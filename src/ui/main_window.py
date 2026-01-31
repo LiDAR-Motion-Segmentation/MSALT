@@ -26,6 +26,7 @@ from src.core.commands import (
 
 import logging
 import numpy as np
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,9 @@ class MainWindow(QMainWindow):
 
         if self.data_controller.get_total_frames() > 0:
             self.load_frame(0)
+            
+        self.session_start_time = time.time()
+        self.objects_created_session = 0
 
 
     def _init_ui(self):
@@ -180,6 +184,15 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Saved: {filename}", 3000)
         logger.info(f"Exported annotation to: {filename}")
         
+        elapsed = time.time() - self.session_start_time
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        count = len(current_boxes)
+        
+        if count > 0:
+            avg_time = elapsed / count
+            self.statusBar().showMessage(f"Saved. Efficiency: {avg_time:.2f} sec/object", 5000)
+            logger.info(f"BENCHMARK: Frame {self.current_frame_idx}, Objects: {count}, Time: {elapsed:.2f}s, Avg: {avg_time:.2f}s/obj")
+        
     def save_specific_frame(self, frame_idx: int):
         """
         Saves a specific frame index to disk immediately.
@@ -252,7 +265,10 @@ class MainWindow(QMainWindow):
         
         # Update Grid if open
         if self.batch_grid_window.isVisible():
-             pass
+            pass
+        
+        # Reset timer for time per frame metric
+        self.session_start_time = time.time()
 
     def on_box_selected(self, box):
         # Highlight the box in 3D view when clicked in list.
@@ -359,6 +375,9 @@ class MainWindow(QMainWindow):
 
             # Save 2D Rect for Cyan Box
             new_box.source_2d = {"cam_id": cam_id, "rect": [x, y, w, h]}
+
+            # Keep the user's drawn 2D box for this camera (prevents "shrink" after 3D fit/projection)
+            new_box.visual_overrides[cam_id] = [x, y, w, h]
 
             # Save and Refresh
             cmd = AddBoxCommand(
