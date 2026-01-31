@@ -31,6 +31,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Sync dependencies (creates virtual env automatically)
 uv sync
+
+# on terminal in the root of the folder
+./msalt
+
+# or use to run with uv
 uv run main.py
 ```
 ![alt text](./assets/ui_v11.png)
