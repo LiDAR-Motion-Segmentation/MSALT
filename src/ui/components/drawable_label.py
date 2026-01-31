@@ -1,9 +1,9 @@
-from PyQt6.QtWidgets import QLabel
+from PyQt6.QtWidgets import QLabel, QSizePolicy
 from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPoint
 from PyQt6.QtGui import QPainter, QPen, QColor, QMouseEvent, QFont, QFontMetrics
 import logging
 from src.core.geometry import GeometryUtils
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +19,12 @@ class DrawableLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMouseTracking(True)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # State
-        self.start_point: QPoint = None
-        self.current_rect: QRect = None
+        self.start_point: Optional[QPoint] = None
+        self.current_rect: Optional[QRect] = None
         self.is_drawing = False
 
         # orginal resolution (set when image is updated)
@@ -60,54 +62,7 @@ class DrawableLabel(QLabel):
         """
         self.static_rects = rects_data
         self.update()
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.is_drawing = True
-            self.start_point = event.position().toPoint()
-            self.current_rect = QRect(self.start_point, self.start_point)
-            self.update()
-
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if self.is_drawing and self.start_point:
-            current_pos = event.position().toPoint()
-            self.current_rect = QRect(self.start_point, current_pos).normalized()
-            self.update()
-
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton and self.is_drawing:
-            self.is_drawing = False
-
-            # Get the drawn rect on screen
-            screen_rect = self.current_rect
-
-            # Convert to Original Image Coordinates
-            if self.pixmap() and not screen_rect.isEmpty():
-                # Calculate scale to map back to original image resolution
-                disp_w = self.width()
-                disp_h = self.height()
-
-                # For simplicity, we assume the pixmap fills the label (ScaledContents=True)
-                # or we calculate the offset.
-
-                scale_x = self.orig_width / disp_w
-                scale_y = self.orig_height / disp_h
-
-                real_x = int(screen_rect.x() * scale_x)
-                real_y = int(screen_rect.y() * scale_y)
-                real_w = int(screen_rect.width() * scale_x)
-                real_h = int(screen_rect.height() * scale_y)
-
-                # Emit the signal
-                logger.info(
-                    f"Image Box Drawn: {real_x}, {real_y}, {real_w}x{real_h}"
-                )
-                self.selection_finished.emit(real_x, real_y, real_w, real_h)
-
-            # Clear visual box after release
-            self.current_rect = None
-            self.update()
-            
+        
     def set_camera_id(self, cam_id: str):
         self.camera_id = cam_id
         
@@ -122,25 +77,150 @@ class DrawableLabel(QLabel):
             rgb = item["color"]
             # Store as QColor for fast drawing
             self.label_color_map[name] = QColor(rgb[0], rgb[1], rgb[2])
+            
+    def get_view_params(self):
+        """
+        Calculates the scale and offsets to center the image while preserving aspect ratio.
+        Returns: (scale, offset_x, offset_y)
+        """
+        if self.orig_width == 0 or self.orig_height == 0:
+            return 1.0, 0, 0
+            
+        widget_w = self.width()
+        widget_h = self.height()
+        
+        scale_x = widget_w / self.orig_width
+        scale_y = widget_h / self.orig_height
+        
+        # Use the smaller scale to fit the image entirely (Letterbox)
+        scale = min(scale_x, scale_y)
+        
+        # Calculate centering offsets
+        new_w = int(self.orig_width * scale)
+        new_h = int(self.orig_height * scale)
+        
+        offset_x = (widget_w - new_w) // 2
+        offset_y = (widget_h - new_h) // 2
+        
+        return scale, offset_x, offset_y
+
+    def _clamp_to_image_area(self, point: QPoint) -> QPoint:
+        """Clamp a widget coordinate point to the displayed image area."""
+        scale, off_x, off_y = self.get_view_params()
+        target_w = int(self.orig_width * scale)
+        target_h = int(self.orig_height * scale)
+        
+        # Image bounds in widget coordinates
+        img_left = off_x
+        img_right = off_x + target_w
+        img_top = off_y
+        img_bottom = off_y + target_h
+        
+        # Clamp point to image area
+        clamped_x = max(img_left, min(point.x(), img_right))
+        clamped_y = max(img_top, min(point.y(), img_bottom))
+        
+        return QPoint(clamped_x, clamped_y)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            scale, off_x, off_y = self.get_view_params()
+            target_w = int(self.orig_width * scale)
+            target_h = int(self.orig_height * scale)
+            img_rect = QRect(off_x, off_y, target_w, target_h)
+            
+            # Only start drawing if click is within image area
+            if img_rect.contains(event.position().toPoint()):
+                self.is_drawing = True
+                self.start_point = self._clamp_to_image_area(event.position().toPoint())
+                self.current_rect = QRect(self.start_point, self.start_point)
+                self.update()
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self.is_drawing and self.start_point:
+            current_pos = self._clamp_to_image_area(event.position().toPoint())
+            self.current_rect = QRect(self.start_point, current_pos).normalized()
+            self.update()
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self.is_drawing:
+            self.is_drawing = False
+
+            # Get the drawn rect on screen
+            screen_rect = self.current_rect
+
+            # Convert to Original Image Coordinates
+            if self.pixmap() and screen_rect is not None and not screen_rect.isEmpty():
+                scale, off_x, off_y = self.get_view_params()
+                
+                # Convert Widget Coords -> Image Coords
+                # formula: img_x = (screen_x - offset) / scale
+                real_x = (screen_rect.x() - off_x) / scale
+                real_y = (screen_rect.y() - off_y) / scale
+                real_w = screen_rect.width() / scale
+                real_h = screen_rect.height() / scale
+                
+                # Clamp to image bounds and adjust dimensions if needed
+                real_x = max(0, min(real_x, self.orig_width - 1))
+                real_y = max(0, min(real_y, self.orig_height - 1))
+                
+                # Ensure width and height don't extend beyond image bounds
+                if real_x + real_w > self.orig_width:
+                    real_w = self.orig_width - real_x
+                if real_y + real_h > self.orig_height:
+                    real_h = self.orig_height - real_y
+                
+                # Convert to integers
+                real_x = int(real_x)
+                real_y = int(real_y)
+                real_w = max(1, int(real_w))  # Ensure at least 1 pixel
+                real_h = max(1, int(real_h))  # Ensure at least 1 pixel
+                
+                # Emit the signal
+                logger.info(
+                    f"Image Box Drawn: {real_x}, {real_y}, {real_w}x{real_h}"
+                )
+                self.selection_finished.emit(real_x, real_y, real_w, real_h)
+
+            # Clear visual box after release
+            self.current_rect = None
+            self.update()
 
     def paintEvent(self, event):
         # draw the image
-        super().paintEvent(event)
+        # super().paintEvent(event)
+        
+        # Do NOT call super().paintEvent(event) 
+        # because that draws the stretched image if setScaledContents(True) is used.
+        # We will draw the pixmap manually with correct aspect ratio.
+        
+        if not self.pixmap():
+            return
         
         # If no calibration, we can't project
         if self.intrinsic is None or self.extrinsic is None:
             return
         
         painter = QPainter(self)
+        
+        # Draw Pixmap (Centered & Scaled)
+        scale, off_x, off_y = self.get_view_params()
+        
+        target_w = int(self.orig_width * scale)
+        target_h = int(self.orig_height * scale)
+        
+        # This draws the image exactly where our math expects it
+        target_rect = QRect(off_x, off_y, target_w, target_h)
+        painter.drawPixmap(target_rect, self.pixmap())
 
         # Setup Font
         font = QFont("Arial", 10, QFont.Weight.Bold)
         painter.setFont(font)
         fm = QFontMetrics(font)
 
-        # Calculate Scale (Widget Size vs Original Image Size)
-        scale_x = self.width() / self.orig_width
-        scale_y = self.height() / self.orig_height
+        # # Calculate Scale (Widget Size vs Original Image Size)
+        # scale_x = self.width() / self.orig_width
+        # scale_y = self.height() / self.orig_height
 
         for box in self.current_boxes_3d:
             rect_2d = None
@@ -163,10 +243,10 @@ class DrawableLabel(QLabel):
             rx, ry, rw, rh = rect_2d
 
             # Scale back to screen coords
-            sx = int(rx * scale_x)
-            sy = int(ry * scale_y)
-            sw = int(rw * scale_x)
-            sh = int(rh * scale_y)
+            sx = int(rx * scale + off_x)
+            sy = int(ry * scale + off_y)
+            sw = int(rw * scale)
+            sh = int(rh * scale)
             
             # Define Color
             if box.selected:
