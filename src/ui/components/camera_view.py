@@ -13,7 +13,7 @@ class CameraStripWidget(BasePluginWidget):
     """
     Manages the row of camera views. 
     """
-    # New Signal: (CameraID, x, y, w, h)
+    # New Signal: (CameraID, x, y, w, h, is_override)
     box_drawn = pyqtSignal(str, int, int, int, int, bool)
 
     def __init__(self, camera_ids: List[str]):
