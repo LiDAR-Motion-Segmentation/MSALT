@@ -27,6 +27,7 @@ from src.core.commands import (
 import logging
 import numpy as np
 import time
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -296,12 +297,15 @@ class MainWindow(QMainWindow):
 
         # Auto-save after delete
         self.save_current_work()
+        
+    def on_camera_box_drawn(self, cam_id: str, x: int, y: int, w: int, h: int, is_override: bool):
+        self.handle_annotation(cam_id, x, y, w, h, is_override)
 
-    def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int):
+    def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int, is_override: bool):
         current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
         selected_box = next((b for b in current_boxes if b.selected), None)
         
-        if selected_box:
+        if selected_box and is_override:
             selected_box.visual_overrides[cam_id] = [x, y, w, h]
             
             logger.info(f"Updated visual override for Track {selected_box.track_id} on {cam_id}")
@@ -311,6 +315,11 @@ class MainWindow(QMainWindow):
             self.refresh_views_only()
             self.save_current_work()
             return
+        
+        if selected_box and not is_override:
+            # We are about to create a new box, but one is selected.
+            # Just helpful UX logging, or auto-deselect logic if you prefer.
+            self.annotation_manager.deselect_all()
             
         # Logic: Box -> SAM2 Mask -> 3D Projection -> Box Fit
         if (
@@ -333,6 +342,34 @@ class MainWindow(QMainWindow):
         if K is None or camera_pos is None:
             logger.error(f"Calibration incomplete for {cam_id}")
             return
+        
+        try: 
+            T_camera_lidar = camera_pos
+        except np.linalg.LinAlgError:
+            logger.error("Singular matrix in calibration")
+            return
+        
+        R_camera_lidar = T_camera_lidar[:3, :3]
+        forward_vector = R_camera_lidar @ np.array([0, 0, 1])
+        camera_heading = np.arctan2(forward_vector[1], forward_vector[0])
+        
+        # Pinhole Ray: (u-cx)/fx, (v-cy)/fy, 1.0
+        cx, cy = K[0, 2], K[1, 2]
+        fx, fy = K[0, 0], K[1, 1]
+        
+        center_x, center_y = x + w/2, y + h/2
+        ray_cam = np.array([(center_x - cx)/fx, (center_y - cy)/fy, 1.0])
+        
+        # Transform Ray to Lidar Frame
+        ray_lidar = R_camera_lidar @ ray_cam
+        cam_origin = T_camera_lidar[:3, 3]
+        
+        fallback_center = None
+        
+        if abs(ray_lidar[2]) > 0.05: # Avoid divide by zero (horizon)
+            t = (-1.0 - cam_origin[2]) / ray_lidar[2]
+            if t > 0:
+                fallback_center = cam_origin + t * ray_lidar
 
         # the actual RGB image array for the model
         image = self.current_frame_data.images.get(cam_id)
@@ -363,9 +400,19 @@ class MainWindow(QMainWindow):
         )
 
         # fit 3D box
-        box_params = GeometryUtils.fit_box_to_cloud(selected_points)
+        try:
+            current_label = self.list_panel.get_current_label()
+            box_params = GeometryUtils.fit_box_to_cloud(selected_points,
+                                                        label=current_label, 
+                                                        camera_heading=camera_heading,
+                                                        fallback_center=fallback_center
+                                                        )
+            
+            if box_params is None:
+                logger.warning("Fit failed: Points too sparse and fallback Raycast failed.")
+                self.statusBar().showMessage("Could not fit box. Try drawing closer.", 3000)
+                return
 
-        if box_params:
             # Create the Box Object
             new_box = BoundingBox3D(**box_params)
             new_box.label = self.list_panel.get_current_label()
@@ -375,9 +422,6 @@ class MainWindow(QMainWindow):
 
             # Save 2D Rect for Cyan Box
             new_box.source_2d = {"cam_id": cam_id, "rect": [x, y, w, h]}
-
-            # Keep the user's drawn 2D box for this camera (prevents "shrink" after 3D fit/projection)
-            new_box.visual_overrides[cam_id] = [x, y, w, h]
 
             # Save and Refresh
             cmd = AddBoxCommand(
@@ -394,8 +438,9 @@ class MainWindow(QMainWindow):
             logger.info(
                 f"Created Box at {new_box.x:.2f}, {new_box.y:.2f}, {new_box.z:.2f}"
             )
-        else:
-            logger.warning("No 3D points found inside the mask.")
+        except Exception as e:
+            logger.error(f"box parameter is failing : {e}")
+            traceback.print_exc()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         # right arrow -> Next Frame

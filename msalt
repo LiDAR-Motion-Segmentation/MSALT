@@ -1,0 +1,5 @@
+#!/bin/bash
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+source "$DIR/.venv/bin/activate"
+"$DIR/.venv/bin/python" "$DIR/main.py" "$@"
