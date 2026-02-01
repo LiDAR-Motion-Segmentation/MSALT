@@ -305,3 +305,11 @@ class AnnotationManager:
                 break
                 
         return count
+    
+    def deselect_all(self):
+        """
+        Iterates through ALL boxes in ALL frames and sets selected = False.
+        """
+        for frame_idx, boxes in self.annotations.items():
+            for box in boxes:
+                box.selected = False

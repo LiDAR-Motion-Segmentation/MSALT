@@ -1,6 +1,6 @@
 from typing import List, Dict
 import numpy as np
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QVBoxLayout, QScrollArea
+from PyQt6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QVBoxLayout, QScrollArea
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap
 
@@ -10,14 +10,17 @@ from src.ui.components.drawable_label import DrawableLabel
 from src.core.objects import BoundingBox3D
 
 class CameraStripWidget(BasePluginWidget):
-
-    # New Signal: (CameraID, x, y, w, h)
-    box_drawn = pyqtSignal(str, int, int, int, int)
+    """
+    Manages the row of camera views. 
+    """
+    # New Signal: (CameraID, x, y, w, h, is_override)
+    box_drawn = pyqtSignal(str, int, int, int, int, bool)
 
     def __init__(self, camera_ids: List[str]):
         super().__init__(title="camera strip")
         self.camera_ids = camera_ids
         self.image_labels: Dict[str, DrawableLabel] = {}
+        self.label_config: List = []
         self._setup_ui()
         
     def set_label_config(self, label_config: List[Dict]):
@@ -57,7 +60,7 @@ class CameraStripWidget(BasePluginWidget):
             lbl_img.setScaledContents(True)
 
             lbl_img.selection_finished.connect(
-                lambda x, y, w, h, cid=cam_id: self.box_drawn.emit(cid, x, y, w, h)
+                lambda x, y, w, h, cid=cam_id: self._on_box_drawn(cid, x, y, w, h)
             )
 
             v_layout.addWidget(lbl_title)
@@ -68,6 +71,14 @@ class CameraStripWidget(BasePluginWidget):
 
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
+        
+    def _on_box_drawn(self, cam_id, x, y, w, h):
+        """Helper to detect Shift key and emit signal."""
+        modifiers = QApplication.keyboardModifiers()
+        is_override = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+        
+        # emit with the override flag
+        self.box_drawn.emit(cam_id, x, y, w, h, is_override)
 
     def on_frame_update(self, data: FrameData) -> None:
         for cam_id, img_array in data.images.items():

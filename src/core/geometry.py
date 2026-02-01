@@ -144,25 +144,70 @@ class GeometryUtils:
         return final_mask
 
     @staticmethod
-    def fit_box_to_cloud(
-        points: np.ndarray, eps: float = 0.5, min_samples: int = 8
-    ) -> dict:
+    def _box_params_at_ray_depth(
+        fallback_center: Optional[np.ndarray],
+        std_dx: float,
+        std_dy: float,
+        std_dz: float,
+        camera_heading: float,
+    ) -> Optional[dict]:
         """
-        Clusters points using DBSCAN and fits a box to the largest cluster.
-        Using params from your script: eps=0.5, min_samples=8
+        Returns box params for a standard-sized box centered at ray-cast depth.
+        Used when point cloud is too sparse or fitting fails (e.g. far objects).
         """
-        if len(points) < 5:
+        if fallback_center is None:
             return None
+        return {
+            "x": float(fallback_center[0]),
+            "y": float(fallback_center[1]),
+            "z": float(fallback_center[2]) + (std_dz / 2),
+            "dx": std_dx,
+            "dy": std_dy,
+            "dz": std_dz,
+            "heading": camera_heading,
+        }
+
+    @staticmethod
+    def fit_box_to_cloud(
+        points: np.ndarray,
+        eps: float = 0.5,
+        min_samples: int = 8,
+        label: str = "unknown",
+        camera_heading: float = 0.0,
+        fallback_center: Optional[np.ndarray] = None,
+    ) -> Optional[dict]:
+        """
+        Fits a box to the cloud.
+        - If points < 5: uses ray-depth fallback when fallback_center is set.
+        - If points >= 5: uses DBSCAN + OBB; on failure falls back to ray-depth when set.
+        """
+        DIMS = {
+            "static_car": (4.5, 2.0, 1.6),
+            "moving_car": (4.5, 2.0, 1.6),
+            "moving_people": (0.5, 0.5, 1.7),
+            "static_people": (0.5, 0.5, 1.7),
+            "truck": (10.0, 2.5, 3.5),
+            "bus": (12.0, 3.0, 3.5),
+            "unknown": (1.0, 1.0, 1.0),
+        }
+        std_dx, std_dy, std_dz = DIMS.get(label, (1.0, 1.0, 1.0))
+
+        if points is None or len(points) < 5:
+            return GeometryUtils._box_params_at_ray_depth(
+                fallback_center, std_dx, std_dy, std_dz, camera_heading
+            )
 
         db = DBSCAN(eps=eps, min_samples=min_samples)
         labels = db.fit_predict(points)
 
         unique_labels = set(labels)
         if -1 in unique_labels:
-            unique_labels.remove(-1)  # Remove noise
+            unique_labels.remove(-1)
 
         if not unique_labels:
-            return None  # Only noise found
+            return GeometryUtils._box_params_at_ray_depth(
+                fallback_center, std_dx, std_dy, std_dz, camera_heading
+            )
 
         # Heuristic: Pick the cluster closest to the sensor origin (0,0,0)
         best_cluster_pts = None
@@ -177,7 +222,9 @@ class GeometryUtils:
                 best_cluster_pts = cluster_pts
 
         if best_cluster_pts is None:
-            return None
+            return GeometryUtils._box_params_at_ray_depth(
+                fallback_center, std_dx, std_dy, std_dz, camera_heading
+            )
 
         # Use Open3D for robust OBB fitting
         pcd = o3d.geometry.PointCloud()
@@ -186,7 +233,9 @@ class GeometryUtils:
         try:
             obb = pcd.get_oriented_bounding_box()
         except RuntimeError:
-            return None  # Degenerate points
+            return GeometryUtils._box_params_at_ray_depth(
+                fallback_center, std_dx, std_dy, std_dz, camera_heading
+            )
 
         # Extract params
         center = obb.center
