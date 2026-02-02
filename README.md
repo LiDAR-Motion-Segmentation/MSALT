@@ -57,7 +57,8 @@ uv run main.py
 | **System** | `Ctrl + S` | Force Save (Auto-save is on by default) |
 | **Undo** | `Ctrl + Z` | Undo changes |
 | **Redo** | `Ctrl + Y` | Redo changes |
-| **3D Box Drawing** | `Ctrl + Left Click` | Draw a new Box in 3D | 
+| **3D Box Drawing** | `Ctrl + Left Click` | Draw a new Box directly on 3D viewer|
+| **3D Box Drawing Cancellation** | `Esc` | To cancel the box drawn on 3D viewer
 | **3D View** | `Left Drag` / `Right Drag` | Rotate / Pan Camera |
 | **3D View** | `Scroll` | Zoom In / Out |
 | **3D Box allignment** | `R` | PCA trigger for correct 3D box allignment |

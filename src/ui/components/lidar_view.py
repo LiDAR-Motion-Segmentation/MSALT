@@ -1,6 +1,6 @@
-from PyQt6.QtGui import QPainter, QColor, QFont, QVector3D
+from PyQt6.QtGui import QPainter, QColor, QFont, QVector3D, QKeyEvent
 from pyqtgraph.Qt.QtGui import QMatrix4x4
-from PyQt6.QtCore import QRect, Qt, pyqtSignal 
+from PyQt6.QtCore import QRect, Qt, pyqtSignal
 import pyqtgraph.opengl as gl
 import numpy as np
 import logging
@@ -49,9 +49,11 @@ class CustomGLWidget(gl.GLViewWidget):
         self.state = DrawState.IDLE
         self.draw_start_pt = None   # [x, y, z]
         self.draw_end_pt = None     # [x, y, z]
+        self.draw_ground_z = None   # Z of ground for current draw (set from first click)
         self.draw_height = 1.5      # Default height
-        self.ground_z = -1.5        # Assumed ground plane
-        
+        self.ground_z = -1.5        # Default ground plane for first ray cast
+        self._height_drag_start_y = None  # For mouse-drag height adjustment
+
         # Ghost Box (Visual Feedback while drawing)
         self.ghost_box = gl.GLBoxItem(color=(0, 255, 255, 255)) # Cyan
         self.ghost_box.setVisible(False)
@@ -74,6 +76,43 @@ class CustomGLWidget(gl.GLViewWidget):
         proj_mat = np.array(p_data, dtype=np.float32).reshape(4, 4)
         
         return view_mat.T, proj_mat.T
+
+    def _screen_to_ray_qt(self, mouse_x: int, mouse_y: int) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Build a world-space picking ray using Qt's unproject (avoids matrix convention issues).
+
+        `QVector3D.project()` returns coordinates with Y-up, so we flip the incoming
+        mouse Y (top-left) into window coordinates (bottom-left) before unproject.
+        """
+        # Account for HiDPI: mouse events are in logical coords; viewport/unproject expects device pixels.
+        dpr = float(getattr(self, "devicePixelRatioF", lambda: 1.0)())
+        w = self.width()
+        h = self.height()
+        if w <= 0 or h <= 0:
+            return np.zeros(3), np.array([0.0, 0.0, 1.0], dtype=np.float32)
+
+        w_px = int(round(w * dpr))
+        h_px = int(round(h * dpr))
+        mx = float(mouse_x) * dpr
+        my = float(mouse_y) * dpr
+
+        view_matrix = self.viewMatrix()
+        proj_matrix = get_projection_matrix(w_px, h_px, self.opts.get("fov", 60), self.opts.get("distance", 20))
+        viewport = QRect(0, 0, w_px, h_px)
+
+        win_y = h_px - my
+        near = QVector3D(mx, win_y, 0.0).unproject(view_matrix, proj_matrix, viewport)
+        far = QVector3D(mx, win_y, 1.0).unproject(view_matrix, proj_matrix, viewport)
+
+        origin = np.array([near.x(), near.y(), near.z()], dtype=np.float32)
+        end = np.array([far.x(), far.y(), far.z()], dtype=np.float32)
+        direction = end - origin
+        norm = float(np.linalg.norm(direction))
+        if norm > 1e-12:
+            direction /= norm
+        else:
+            direction = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+        return origin, direction
         
     def mousePressEvent(self, event):
         # using ctrl+left click start the process
@@ -81,21 +120,17 @@ class CustomGLWidget(gl.GLViewWidget):
             if event.button() == Qt.MouseButton.LeftButton:
                 logger.info(f"Ctrl+Click detected at {event.pos()}")
                 if self.state == DrawState.IDLE:
-                    vm, pm = self._get_matrices_np()
-                    origin, direction = GeometryUtils.screen_to_ray(
-                        event.pos().x(), event.pos().y(),
-                        self.width(), self.height(),
-                        vm, pm 
-                    )
+                    origin, direction = self._screen_to_ray_qt(event.pos().x(), event.pos().y())
                     
                     hit = GeometryUtils.intersect_ray_plane(origin, direction, self.ground_z)
                     
                     if hit is not None:
                         logger.info("State changed to DRAGGING_BASE")
                         self.state = DrawState.DRAGGING_BASE
-                        self.draw_start_pt = hit
-                        self.draw_end_pt = hit
-                        self.draw_height = 0.0 # start flat
+                        self.draw_start_pt = hit.copy()
+                        self.draw_end_pt = hit.copy()
+                        self.draw_ground_z = float(hit[2])  # Use clicked point's Z as ground for this box
+                        self.draw_height = 0.0  # start flat
                         self._update_ghost_box()
                     else:
                         logger.info("Ray missed the ground plane!")
@@ -103,36 +138,35 @@ class CustomGLWidget(gl.GLViewWidget):
                 elif self.state == DrawState.SETTING_HEIGHT:
                     # finish drawing
                     self._finalize_drawing()
-                    self.state = DrawState.IDLE
+                    self._reset_draw_state()
                     self.ghost_box.setVisible(False)
-            
+                    event.accept()
+                    return
             event.accept()
         else:
+            # No Ctrl: allow height drag in SETTING_HEIGHT (left press starts drag)
+            if self.state == DrawState.SETTING_HEIGHT and event.button() == Qt.MouseButton.LeftButton:
+                self._height_drag_start_y = event.pos().y()
+                event.accept()
+                return
             super().mousePressEvent(event)
             
     def mouseMoveEvent(self, event):
         if self.state == DrawState.DRAGGING_BASE:
-            vm, pm = self._get_matrices_np()
-            origin, direction = GeometryUtils.screen_to_ray(
-                event.pos().x(), event.pos().y(),
-                self.width(), self.height(),
-                vm, pm
-            )
-            
-            hit = GeometryUtils.intersect_ray_plane(origin, direction, self.ground_z)
-            
+            plane_z = self.draw_ground_z if self.draw_ground_z is not None else self.ground_z
+            origin, direction = self._screen_to_ray_qt(event.pos().x(), event.pos().y())
+            hit = GeometryUtils.intersect_ray_plane(origin, direction, plane_z)
             if hit is not None:
                 self.draw_end_pt = hit
                 self._update_ghost_box()
                 
         elif self.state == DrawState.SETTING_HEIGHT:
-            # Update Height (Visual only)
-            # We map vertical mouse movement to Z height
-            # Simple heuristic: 100 pixels = 2 meters
-            # Ideally we track delta from mouseRelease, but absolute Y works for now
-            pass
-            # (Refinement: We can implement pixel-delta logic here if needed)
-        
+            # Mouse drag to adjust height: vertical delta -> height change
+            if self._height_drag_start_y is not None:
+                delta_y = self._height_drag_start_y - event.pos().y()  # up = taller
+                self.draw_height = max(0.2, self.draw_height + delta_y * 0.02)
+                self._height_drag_start_y = event.pos().y()
+                self._update_ghost_box()
         super().mouseMoveEvent(event)
     
     def mouseReleaseEvent(self, event):
@@ -142,48 +176,79 @@ class CustomGLWidget(gl.GLViewWidget):
             
             # setting a default height so that the box pops up immmediately
             self.draw_height = 1.6
+            self._height_drag_start_y = None
+            self._update_ghost_box()
+            event.accept()
+        elif self.state == DrawState.SETTING_HEIGHT:
+            self._height_drag_start_y = None
+            super().mouseReleaseEvent(event)
+        else:
+            super().mouseReleaseEvent(event)
+
+    def wheelEvent(self, event):
+        if self.state == DrawState.SETTING_HEIGHT:
+            delta = event.angleDelta().y()
+            self.draw_height = max(0.2, self.draw_height + (delta / 120.0) * 0.2)
             self._update_ghost_box()
             event.accept()
         else:
-            super().mouseReleaseEvent(event)
+            super().wheelEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == Qt.Key.Key_Escape:
+            if self.state != DrawState.IDLE:
+                self._reset_draw_state()
+                self.ghost_box.setVisible(False)
+                self.update()
+                event.accept()
+                return
+        super().keyPressEvent(event)
     
+    def _reset_draw_state(self):
+        """Clear drawing state after confirm or cancel."""
+        self.state = DrawState.IDLE
+        self.draw_start_pt = None
+        self.draw_end_pt = None
+        self.draw_ground_z = None
+        self.draw_height = 1.5
+        self._height_drag_start_y = None
+
     def _update_ghost_box(self):
-        """Updates the GLBoxItem to match current drawing state."""
-        if self.draw_start_pt is None and self.draw_end_pt is None:
+        """Updates the GLBoxItem to match current drawing state. GLBoxItem is center-based."""
+        if self.draw_start_pt is None or self.draw_end_pt is None:
             return
-        
+        ground_z = self.draw_ground_z if self.draw_ground_z is not None else self.ground_z
         p1 = self.draw_start_pt
         p2 = self.draw_end_pt
         
         # calculate dimensions
         dx = abs(p2[0] - p1[0])
         dy = abs(p2[1] - p1[1])
-        dz = self.draw_height
-        
-        # caculate center, currently box item draws them from the center but translation needs to be done
+        dz = max(0.01, self.draw_height)
         min_x = min(p1[0], p2[0])
         min_y = min(p1[1], p2[1])
-        min_z = self.ground_z
-        
+        # Box center in XY is base center; in Z we want bottom at ground_z so center at ground_z + dz/2
+        center_x = min_x + dx / 2.0
+        center_y = min_y + dy / 2.0
+        center_z = ground_z + dz / 2.0
         self.ghost_box.setSize(dx, dy, dz)
         self.ghost_box.resetTransform()
-        self.ghost_box.translate(min_x, min_y, min_z)
+        self.ghost_box.translate(center_x, center_y, center_z)
         self.ghost_box.setVisible(True)
         self.update()
     
     def _finalize_drawing(self):
+        if self.draw_start_pt is None or self.draw_end_pt is None:
+            return
         p1 = self.draw_start_pt
         p2 = self.draw_end_pt
-        
+        ground_z = self.draw_ground_z if self.draw_ground_z is not None else self.ground_z
         dx = abs(p2[0] - p1[0])
         dy = abs(p2[1] - p1[1])
-        dz = self.draw_height
-        
+        dz = max(0.01, self.draw_height)
         cx = (p1[0] + p2[0]) / 2.0
         cy = (p1[1] + p2[1]) / 2.0
-        cz = self.ground_z + (dz / 2.0)
-        
-        # min size check
+        cz = ground_z + (dz / 2.0)
         if dx > 0.1 and dy > 0.1:
             self.box_created.emit(cx, cy, cz, dx, dy, dz, 0.0)
                 
@@ -193,8 +258,14 @@ class CustomGLWidget(gl.GLViewWidget):
         # 2D painter to draw on the top
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(QColor(255, 255, 255)) # white text
+        painter.setPen(QColor(255, 255, 255))
         painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+
+        # Draw status hint when manually drawing a box
+        if self.state == DrawState.DRAGGING_BASE:
+            painter.drawText(10, 24, "Draw base: Ctrl+Click release to set height | Esc: cancel")
+        elif self.state == DrawState.SETTING_HEIGHT:
+            painter.drawText(10, 24, "Ctrl+Click: confirm | Scroll/drag: height | Esc: cancel")
         
         # Get Matrices for Projection
         view_matrix = self.viewMatrix()
@@ -274,7 +345,11 @@ class LidarVisualizer(BasePluginWidget):
     def on_frame_update(self, data: FrameData) -> None:
         if data.point_cloud is not None:
             self.current_points = data.point_cloud  # (N, 3)
-            
+            # Set ground plane from point cloud so manual box drawing aligns with scene
+            z = self.current_points[:, 2]
+            if len(z) > 0:
+                # Use a low percentile and a small downward bias to avoid "floating" boxes.
+                self.view_widget.ground_z = float(np.percentile(z, 0.5) - 0.05)
             if not self.view_widget.overlay_boxes:
                 self._draw_points_default()
             
