@@ -51,7 +51,7 @@ class CustomGLWidget(gl.GLViewWidget):
         self.draw_end_pt = None     # [x, y, z]
         self.draw_ground_z = None   # Z of ground for current draw (set from first click)
         self.draw_height = 1.5      # Default height
-        self.ground_z = -1.5        # Default ground plane for first ray cast
+        self.ground_z = -1.5        # Default ground plane for first ray cast (can be overridden by config)
         self._height_drag_start_y = None  # For mouse-drag height adjustment
 
         # Ghost Box (Visual Feedback while drawing)
@@ -303,8 +303,14 @@ class CustomGLWidget(gl.GLViewWidget):
         painter.end()      
         
 class LidarVisualizer(BasePluginWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, cfg=None):
         super().__init__(parent)
+        # Configuration for ground plane estimation and defaults
+        self._cfg = cfg
+        self.ground_percentile = getattr(cfg, "ground_percentile", 0.5) if cfg is not None else 0.5
+        self.ground_bias = getattr(cfg, "ground_bias", 0.05) if cfg is not None else 0.05
+        self.default_ground_z = getattr(cfg, "default_ground_z", -1.5) if cfg is not None else -1.5
+
         self._setup_ui()
         self.current_boxes = []
         self.box_items = []         # Visual Items (Lines)
@@ -328,6 +334,8 @@ class LidarVisualizer(BasePluginWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.view_widget = CustomGLWidget()
+        # Initialize ground plane from config until we have a point cloud-based estimate
+        self.view_widget.ground_z = float(self.default_ground_z)
         self.view_widget.opts["distance"] = 20
         self.view_widget.setWindowTitle("LiDAR Viewer")
 
@@ -348,8 +356,10 @@ class LidarVisualizer(BasePluginWidget):
             # Set ground plane from point cloud so manual box drawing aligns with scene
             z = self.current_points[:, 2]
             if len(z) > 0:
-                # Use a low percentile and a small downward bias to avoid "floating" boxes.
-                self.view_widget.ground_z = float(np.percentile(z, 0.5) - 0.05)
+                # Use configured percentile and downward bias to avoid "floating" boxes.
+                self.view_widget.ground_z = float(
+                    np.percentile(z, self.ground_percentile) - self.ground_bias
+                )
             if not self.view_widget.overlay_boxes:
                 self._draw_points_default()
             
