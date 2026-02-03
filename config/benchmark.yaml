@@ -1,0 +1,31 @@
+defaults:  
+  - _self_  
+
+# Benchmark Settings
+output_dir: "/home/soumoroy/SALT/MSALT_outputs_annotations_nuscenes/"                   
+data_root: "/home/soumoroy/Downloads/v1.0-mini"                                       
+scene_id: 1                                           
+num_frames: 5                                        
+iou_threshold: 0.3   # IoU > 0.3 counts as True Positive
+
+# Class Mapping (Grouping diverse labels into Report Categories)
+# Format: "Raw_Dataset_Label": "Report_Class_Name"
+label_mapping:
+  # Cars
+  moving_car: "Car"
+  static_car: "Car"
+  vehicle.car: "Car"
+  
+  # Pedestrians
+  moving_people: "Pedestrian"
+  static_people: "Pedestrian"
+  human.pedestrian.adult: "Pedestrian"
+  human.pedestrian.construction_worker: "Pedestrian"
+  human.pedestrian.police_officer: "Pedestrian"
+  
+  # Large Vehicles
+  truck: "Truck"
+  vehicle.truck: "Truck"
+  bus: "Bus"
+  vehicle.bus.rigid: "Bus"
+  vehicle.bus.bendy: "Bus"
