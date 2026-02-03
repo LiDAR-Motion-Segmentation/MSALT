@@ -179,12 +179,16 @@ class AnnotationManager:
             else:
                 logger.warning("Cannot save deletion: Output directories not set.")
                 
-    def run_smart_interpolation(self, 
-                                track_id: int, 
-                                start_frame, 
-                                end_frame, 
-                                data_controller, 
-                                seg_engine) -> int:
+    def run_smart_interpolation(
+        self, 
+        track_id: int, 
+        start_frame, 
+        end_frame, 
+        data_controller, 
+        seg_engine,
+        dbscan_eps: float = 0.5,
+        dbscan_min_samples: int = 4,
+    ) -> int:
         """
         Finds the previous appearance of track_id and fills frames up to current_frame_idx.
         """
@@ -257,13 +261,20 @@ class AnnotationManager:
                     on_mask = mask[candidate_uv[:, 1], candidate_uv[:, 0]]
                     object_indices = candidate_indices[on_mask]
                     
-                    if len(object_indices) >= 10:
-                        object_points = points[object_indices]
-                        new_box = GeometryUtils.fit_box_with_pca(object_points, current_box)
-                        if new_box:
-                            logger.info(f"Frame {f_idx}: Tracked via SAM ({best_cam_id})")
-                        else:
-                            logger.warning(f"Frame {f_idx}: Only found {len(object_indices)} points on mask (Too few)") 
+                if len(object_indices) >= 10:
+                    object_points = points[object_indices]
+                    new_box = GeometryUtils.fit_box_with_pca(
+                        object_points,
+                        current_box,
+                        eps=dbscan_eps,
+                        min_samples=dbscan_min_samples,
+                    )
+                    if new_box:
+                        logger.info(f"Frame {f_idx}: Tracked via SAM ({best_cam_id})")
+                    else:
+                        logger.warning(
+                            f"Frame {f_idx}: Only found {len(object_indices)} points on mask (Too few)"
+                        ) 
             
             # lidar tracking
             if new_box is None:
@@ -285,7 +296,12 @@ class AnnotationManager:
                     # Fit
                     logger.info(f"Frame {f_idx}: Running PCA Fit on {len(cloud_subset)} points...")
                     try:
-                        new_box = GeometryUtils.fit_box_with_pca(cloud_subset, current_box)
+                        new_box = GeometryUtils.fit_box_with_pca(
+                            cloud_subset,
+                            current_box,
+                            eps=dbscan_eps,
+                            min_samples=dbscan_min_samples,
+                        )
                         if new_box:
                             logger.info(f"Frame {f_idx}: LiDAR Fit Successful!")
                         else:
