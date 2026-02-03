@@ -96,12 +96,18 @@ class ModifyBoxCommand(Command):
         self.new_state = deepcopy(new_box)
         
     def execute(self) -> bool:
+        """
+        Apply the modification: replace old_state with new_state.
+        """
         self.manager.delete_box(self.frame_idx, self.old_state)
-        self.manager.add_box(self.frame_idx, self.old_state)
+        self.manager.add_box(self.frame_idx, self.new_state)
         return True
     
     def undo(self) -> None:
-        self.manager.delete_box(self.frame_idx, self.old_state)
+        """
+        Revert the modification: restore old_state.
+        """
+        self.manager.delete_box(self.frame_idx, self.new_state)
         self.manager.add_box(self.frame_idx, self.old_state)
         
     def name(self) -> str:
