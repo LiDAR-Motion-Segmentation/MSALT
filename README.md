@@ -200,6 +200,30 @@ uv run ruff check . --fix
 uv run pytest 
 ```
 
+### annotation_manager tests (test_annotation_manager.py)
+- `test_add_box_assigns_track_id_when_unset`: verifies auto track_id assignment when track_id = -1.
+- `test_add_box_preserves_existing_track_id`: ensures explicit IDs are not overwritten.
+- `test_delete_box_removes_box_from_frame`: simple delete behavior per frame.
+- `test_remove_box_by_track_id`: checks remove_box deletes the correct track ID and leaves others.
+- `test_deselect_all_clears_selected_flag_across_frames`: ensures deselect_all clears selected across all frames.
+
+### commands tests (test_commands.py)
+- Uses a lightweight FakeAnnotationManager to avoid disk and UI coupling.
+- `test_add_box_command_execute_and_undo`: AddBoxCommand correctly adds and undoes.
+- `test_delete_box_command_execute_and_undo`: DeleteBoxCommand deletes and restores.
+- `test_bulk_delete_command_execute_and_undo`: BulkDeleteCommand deletes a batch and undo restores all.
+- `test_modify_box_command_execute_undo_and_redo`: validates ModifyBoxCommand now:
+1. replaces old_state with new_state on execute,
+2. restores old_state on undo,
+3. reapplies new_state on redo.
+- To support this, `ModifyBoxCommand` in `commands.py` was fixed so `execute()` uses new_state and `undo()` restores old_state.
+
+### geometry tests (test_geometry.py, extended)
+- Existing tests kept as is (`test_box_corners`, `test_points_in_box`).
+- New tests:
+1. `test_interpolate_box_midpoint`: checks that interpolate_box at `t=0.5` produces the geometric midpoint and halfway heading.
+2. `test_refine_heading_returns_current_when_too_few_points`: ensures refine_heading returns the original heading for very small point sets (<5).
+
 ## Docker (Devcontainer)
 ### Prerequisites
 
