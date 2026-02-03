@@ -30,3 +30,19 @@ labels:
   - name: "moving_car"
     color: [255, 0, 255]      # Magenta
     hotkey: "5"
+
+geometry:
+  fit_box_to_cloud:
+    eps: 0.5
+    min_samples: 8
+  fit_box_with_pca:
+    eps: 0.5
+    min_samples: 4
+
+automation:
+  track_horizon: 10
+
+lidar_view:
+  default_ground_z: -1.5
+  ground_percentile: 0.5   # percentile used to estimate ground from point cloud Z
+  ground_bias: 0.05        # small downward bias so boxes don't float above ground

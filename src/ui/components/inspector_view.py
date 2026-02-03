@@ -9,15 +9,16 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal
 from src.core.objects import BoundingBox3D
-
+from typing import List, Dict
 
 class InspectorWidget(QWidget):
     box_changed = pyqtSignal(BoundingBox3D)
 
-    def __init__(self) -> None:
+    def __init__(self, label_config: List[Dict] = None) -> None:
         super().__init__()
         self.current_box = None
         self.is_updating = False
+        self.label_config = label_config if label_config else []
         self._init_ui()
 
     def _create_spinner(
@@ -40,7 +41,15 @@ class InspectorWidget(QWidget):
         self.spin_id.valueChanged.connect(self._on_change)
 
         self.combo_cls = QComboBox()
-        self.combo_cls.addItems(["moving_people", "static_people", "moving_car", "static_car", "unknown"])
+        
+        # Extract names from the config list [{'name': 'car', ...}, ...]
+        if self.label_config:
+            label_names = [item['name'] for item in self.label_config]
+            self.combo_cls.addItems(label_names)
+        else:
+            # Fallback if config is missing
+            self.combo_cls.addItems([ "unkown"])
+            
         self.combo_cls.currentTextChanged.connect(self._on_change)
 
         form_id.addRow("Track ID:", self.spin_id)

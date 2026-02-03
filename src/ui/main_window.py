@@ -39,15 +39,21 @@ class MainWindow(QMainWindow):
         self.resize(1920, 1080)
         self.data_controller = data_controller
         
+        # Hydra configuration shortcuts
+        self.cfg = self.data_controller.cfg
+        self.geometry_cfg = getattr(self.cfg, "geometry", None)
+        self.automation_cfg = getattr(self.cfg, "automation", None)
+        self.lidar_view_cfg = getattr(self.cfg, "lidar_view", None)
+        
         # Initialize Manager and Load Frames
         self.annotation_manager = AnnotationManager()
-        base_out = Path(self.data_controller.cfg.output.dir)
+        base_out = Path(self.cfg.output.dir)
         self.annotation_manager.load_frames(
             boxes_dir=base_out / "3d", meta_dir=base_out / "metadata"
         )
 
-        self.seg_engine = SegmentationEngine(self.data_controller.cfg.models)
-        self.labels_cfg= getattr(self.data_controller.cfg, "labels", None)
+        self.seg_engine = SegmentationEngine(self.cfg.models)
+        self.labels_cfg= getattr(self.cfg, "labels", None)
 
         # Initializing the history
         self.history = CommandHistory()
@@ -72,7 +78,7 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         
         # CENTER: LiDAR View 
-        self.lidar_widget = LidarVisualizer()
+        self.lidar_widget = LidarVisualizer(cfg=self.lidar_view_cfg)
         self.lidar_widget.set_label_colors(self.labels_cfg)
         self.setCentralWidget(self.lidar_widget)
         self.lidar_widget.view_widget.box_created.connect(self.handle_3d_annotation)
@@ -110,7 +116,7 @@ class MainWindow(QMainWindow):
         self.list_panel.box_deleted.connect(self.on_box_deleted)
 
         # RIGHT: Inspector 
-        self.inspector = InspectorWidget()
+        self.inspector = InspectorWidget(label_config=self.labels_cfg)
         self.add_dock(
             self.inspector, "Inspector", Qt.DockWidgetArea.RightDockWidgetArea
         )

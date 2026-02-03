@@ -541,13 +541,16 @@ class GeometryUtils:
         return ray_origin + t * ray_dir
     
     @staticmethod
-    def fit_box_with_pca(points: np.ndarray, previous_box: BoundingBox3D) -> BoundingBox3D:
+    def fit_box_with_pca(points: np.ndarray,
+        previous_box: BoundingBox3D,
+        eps: float = 0.5,
+        min_samples: int = 4) -> BoundingBox3D:
         """
         Refines a box using DBSCAN (outlier removal) + PCA (orientation).
         """
         if len(points) < 5:
             return None
-        clustering = DBSCAN(eps=0.5, min_samples=4).fit(points[:, :3])
+        clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points[:, :3])
         all_labels = clustering.labels_
         unique_labels = set(all_labels) - {-1}
         if not unique_labels:
