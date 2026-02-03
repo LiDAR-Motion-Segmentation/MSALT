@@ -45,6 +45,7 @@ class CustomGLWidget(gl.GLViewWidget):
         
         # Data Storage
         self.overlay_boxes = []
+        self.gt_boxes = []
 
         # Drawing State
         self.state = DrawState.IDLE
@@ -306,6 +307,21 @@ class CustomGLWidget(gl.GLViewWidget):
                 label_text = f"{box.track_id}: {box.label}"
                 painter.drawText(int(screen_x), int(screen_y) - 10, label_text)
                 
+        painter.setPen(QColor(255, 0, 255)) 
+        
+        for box in self.gt_boxes:
+            cx, cy, cz = box.x, box.y, box.z + (box.dz / 2.0)
+            obj_vec = QVector3D(cx, cy, cz)
+            screen_pos = obj_vec.project(view_matrix, proj_matrix, viewport)
+            
+            if 0.0 <= screen_pos.z() <= 1.0:
+                screen_x = screen_pos.x()
+                screen_y = h - screen_pos.y()
+                # GT doesn't usually have a track_id in NuScenes mini, or it's very long
+                # We show "GT: <Label>"
+                label_text = f"GT: {box.label}"
+                painter.drawText(int(screen_x), int(screen_y) - 10, label_text)
+                
         painter.end()           
         
 class LidarVisualizer(BasePluginWidget):
@@ -501,12 +517,16 @@ class LidarVisualizer(BasePluginWidget):
     def _draw_gt_overlays(self):
         """Draws GT boxes (Magenta/Purple)."""
         # Clear old GT items
+        self.view_widget.gt_boxes = self.gt_boxes_cache
+        
         for item in self.gt_box_items:
             self.view_widget.removeItem(item)
         self.gt_box_items.clear()
         
         for box in self.gt_boxes_cache:
             self._draw_box_item(box, is_gt=True)
+            
+        self.view_widget.update()
     
     def _draw_box_item(self, box, is_gt=False):
         corners = box.get_corners()
@@ -537,8 +557,11 @@ class LidarVisualizer(BasePluginWidget):
     def toggle_comparison(self, checked):
         self.show_gt_boxes = checked
        
-        # 1. Handle Wireframes
+        # Handle Wireframes
         if checked:
+            # Pass data to widget so paintEvent can draw text labels
+            self.view_widget.gt_boxes = self.gt_boxes_cache
+            
             # Clear any old ones first
             for item in self.gt_box_items:
                 self.view_widget.removeItem(item)
@@ -548,12 +571,17 @@ class LidarVisualizer(BasePluginWidget):
             for box in self.gt_boxes_cache:
                 self._draw_box_item(box, is_gt=True)
         else:
+            self.view_widget.gt_boxes = []
+            
             # Remove all
             for item in self.gt_box_items:
                 self.view_widget.removeItem(item)
             self.gt_box_items.clear()
+         
+        # Force Repaint for Text
+        self.view_widget.update() 
             
-        # 2. Handle Point Repaint
+        # Handle Point Repaint
         self.update_boxes(self.view_widget.overlay_boxes)
             
     def _draw_points_default(self):
