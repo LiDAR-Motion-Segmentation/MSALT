@@ -37,16 +37,22 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("MSALT: Multi Sensor Fusion Annotator")
         self.resize(1920, 1080)
         self.data_controller = data_controller
+
+        # Hydra configuration shortcuts
+        self.cfg = self.data_controller.cfg
+        self.geometry_cfg = getattr(self.cfg, "geometry", None)
+        self.automation_cfg = getattr(self.cfg, "automation", None)
+        self.lidar_view_cfg = getattr(self.cfg, "lidar_view", None)
         
         # Initialize Manager and Load Frames
         self.annotation_manager = AnnotationManager()
-        base_out = Path(self.data_controller.cfg.output.dir)
+        base_out = Path(self.cfg.output.dir)
         self.annotation_manager.load_frames(
             boxes_dir=base_out / "3d", meta_dir=base_out / "metadata"
         )
 
-        self.seg_engine = SegmentationEngine(self.data_controller.cfg.models)
-        self.labels_cfg= getattr(self.data_controller.cfg, "labels", None)
+        self.seg_engine = SegmentationEngine(self.cfg.models)
+        self.labels_cfg = getattr(self.cfg, "labels", None)
 
         # Initializing the history
         self.history = CommandHistory()
@@ -68,7 +74,7 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         
         # CENTER: LiDAR View 
-        self.lidar_widget = LidarVisualizer()
+        self.lidar_widget = LidarVisualizer(cfg=self.lidar_view_cfg)
         self.lidar_widget.set_label_colors(self.labels_cfg)
         self.setCentralWidget(self.lidar_widget)
         self.lidar_widget.view_widget.box_created.connect(self.handle_3d_annotation)
@@ -168,7 +174,7 @@ class MainWindow(QMainWindow):
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
 
-        base_out = Path(self.data_controller.cfg.output.dir)
+        base_out = Path(self.cfg.output.dir)
         boxes_dir = base_out / "3d"
         meta_dir = base_out / "metadata"
 
@@ -186,7 +192,7 @@ class MainWindow(QMainWindow):
         Saves a specific frame index to disk immediately.
         Triggered by Batch View auto-save.
         """
-        base_out = Path(self.data_controller.cfg.output.dir)
+        base_out = Path(self.cfg.output.dir)
         boxes_dir = base_out / "3d"
         meta_dir = base_out / "metadata"
 
@@ -387,11 +393,20 @@ class MainWindow(QMainWindow):
         # fit 3D box
         try:
             current_label = self.list_panel.get_current_label()
-            box_params = GeometryUtils.fit_box_to_cloud(selected_points,
-                                                        label=current_label, 
-                                                        camera_heading=camera_heading,
-                                                        fallback_center=fallback_center
-                                                        )
+
+            # Geometry hyperparameters from config (fit_box_to_cloud)
+            fit_cloud_cfg = getattr(self.geometry_cfg, "fit_box_to_cloud", None) if self.geometry_cfg is not None else None
+            eps = getattr(fit_cloud_cfg, "eps", 0.5) if fit_cloud_cfg is not None else 0.5
+            min_samples = getattr(fit_cloud_cfg, "min_samples", 8) if fit_cloud_cfg is not None else 8
+
+            box_params = GeometryUtils.fit_box_to_cloud(
+                selected_points,
+                eps=eps,
+                min_samples=min_samples,
+                label=current_label, 
+                camera_heading=camera_heading,
+                fallback_center=fallback_center,
+            )
             
             if box_params is None:
                 logger.warning("Fit failed: Points too sparse and fallback Raycast failed.")
@@ -578,9 +593,19 @@ class MainWindow(QMainWindow):
             return
         
         total_filed = 0
-        TRACK_HORIZON = 10
+        # Tracking horizon configurable via Hydra (automation.track_horizon)
+        track_horizon = getattr(self.automation_cfg, "track_horizon", 10)
         start_frame = self.current_frame_idx
-        end_frame = min(start_frame + TRACK_HORIZON, self.data_controller.get_total_frames() - 1)
+        end_frame = min(
+            start_frame + track_horizon,
+            self.data_controller.get_total_frames() - 1,
+        )
+
+        # Geometry DBSCAN settings for smart interpolation
+        fit_pca_cfg = getattr(self.geometry_cfg, "fit_box_with_pca", None) if self.geometry_cfg is not None else None
+        dbscan_eps = getattr(fit_pca_cfg, "eps", 0.5) if fit_pca_cfg is not None else 0.5
+        dbscan_min_samples = getattr(fit_pca_cfg, "min_samples", 4) if fit_pca_cfg is not None else 4
+
         for box in selected_boxes:
             self.statusBar().showMessage(f"Tracking ID {box.track_id}...")
             count = self.annotation_manager.run_smart_interpolation(
@@ -588,7 +613,9 @@ class MainWindow(QMainWindow):
                 self.current_frame_idx, 
                 end_frame,
                 self.data_controller,
-                self.seg_engine
+                self.seg_engine,
+                dbscan_eps=dbscan_eps,
+                dbscan_min_samples=dbscan_min_samples,
             )
             total_filed += count
             
@@ -596,7 +623,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Saving {total_filed} frames to disk...", 3000)
             
             # Retrieve output paths from Config, matching save_current_work()
-            base_out = Path(self.data_controller.cfg.output.dir)
+            base_out = Path(self.cfg.output.dir)
             boxes_dir = base_out / "3d"
             meta_dir = base_out / "metadata"
             
