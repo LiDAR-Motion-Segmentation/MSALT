@@ -185,6 +185,8 @@ defaults:
 │       ├── main_window.py
 │       ├── playback_widget.py
 ├── test
+|   ├── test_annotation_manager.py
+|   ├── test_commands.py
 │   └── test_geometry.py
 └── uv.lock
 ```
@@ -200,14 +202,14 @@ uv run ruff check . --fix
 uv run pytest 
 ```
 
-### annotation_manager tests (test_annotation_manager.py)
+### annotation_manager tests (`test_annotation_manager.py`)
 - `test_add_box_assigns_track_id_when_unset`: verifies auto track_id assignment when track_id = -1.
 - `test_add_box_preserves_existing_track_id`: ensures explicit IDs are not overwritten.
 - `test_delete_box_removes_box_from_frame`: simple delete behavior per frame.
 - `test_remove_box_by_track_id`: checks remove_box deletes the correct track ID and leaves others.
 - `test_deselect_all_clears_selected_flag_across_frames`: ensures deselect_all clears selected across all frames.
 
-### commands tests (test_commands.py)
+### commands tests (`test_commands.py`)
 - Uses a lightweight FakeAnnotationManager to avoid disk and UI coupling.
 - `test_add_box_command_execute_and_undo`: AddBoxCommand correctly adds and undoes.
 - `test_delete_box_command_execute_and_undo`: DeleteBoxCommand deletes and restores.
@@ -218,7 +220,7 @@ uv run pytest
 3. reapplies new_state on redo.
 - To support this, `ModifyBoxCommand` in `commands.py` was fixed so `execute()` uses new_state and `undo()` restores old_state.
 
-### geometry tests (test_geometry.py, extended)
+### geometry tests (`test_geometry.py`)
 - Existing tests kept as is (`test_box_corners`, `test_points_in_box`).
 - New tests:
 1. `test_interpolate_box_midpoint`: checks that interpolate_box at `t=0.5` produces the geometric midpoint and halfway heading.
@@ -308,9 +310,101 @@ extensions:
 ```
 git checkout perf/nuscenes
 uv sync
+
+# run this
 uv run main.py
+
+# OR
+./msalt
 ```
-![alt text](./assets/nuscenes.png)
+![alt text](./assets/nuscenes_v2.png)
+
+### Benchmarking
+- You can click on `Compare Ground Truth` to see the ground truth bounding boxes in the viewer
+- Change the paths in the `benchmark.yaml` config to take in the paths
+```
+defaults:  
+  - _self_  
+
+# Benchmark Settings
+output_dir: "/MSALT_outputs_annotations_nuscenes/"                   
+data_root: "/home/Downloads/v10-mini"                                       
+scene_id: 1                                           
+num_frames: 5                                        
+iou_threshold: 0.3   # IoU > 0.3 counts as True Positive
+
+# Class Mapping (Grouping diverse labels into Report Categories)
+# Format: "Raw_Dataset_Label": "Report_Class_Name"
+label_mapping:
+  # Cars
+  moving_car: "Car"
+  static_car: "Car"
+  vehicle.car: "Car"
+  
+  # Pedestrians
+  moving_people: "Pedestrian"
+  static_people: "Pedestrian"
+  human.pedestrian.adult: "Pedestrian"
+  human.pedestrian.construction_worker: "Pedestrian"
+  human.pedestrian.police_officer: "Pedestrian"
+  
+  # Large Vehicles
+  truck: "Truck"
+  vehicle.truck: "Truck"
+  bus: "Bus"
+  vehicle.bus.rigid: "Bus"
+  vehicle.bus.bendy: "Bus"
+```
+- after this you can run `benchmark/benchmark_nuscenes.py` to generate the results for precision, recall, F1-score and mean IoU for a scene and a series of sequences
+```
+valuating 5 frames for Scene 1...
+Frame  | Class      | GT  | Pred | Best IoU | Status
+-----------------------------------------------------------------
+0      | Pedestrian | 19  | 2    | 0.56     | TP
+0      | Pedestrian | 19  | 2    | 0.33     | TP
+0      | Pedestrian | 19  | -    | -        | Missed 17
+0      | Car        | 4   | 2    | 0.53     | TP
+0      | Car        | 4   | 2    | 0.62     | TP
+0      | Car        | 4   | -    | -        | Missed 2
+1      | Pedestrian | 23  | 2    | 0.62     | TP
+1      | Pedestrian | 23  | 2    | 0.79     | TP
+1      | Pedestrian | 23  | -    | -        | Missed 21
+1      | Car        | 7   | 1    | 0.48     | TP
+1      | Car        | 7   | -    | -        | Missed 6
+2      | Pedestrian | 24  | 2    | 0.56     | TP
+2      | Pedestrian | 24  | 2    | 0.33     | TP
+2      | Pedestrian | 24  | -    | -        | Missed 22
+2      | Car        | 8   | 1    | 0.51     | TP
+2      | Car        | 8   | -    | -        | Missed 7
+2      | Truck      | 1   | -    | -        | Missed 1
+3      | Pedestrian | 26  | 3    | 0.25     | FP
+3      | Pedestrian | 26  | 3    | 0.44     | TP
+3      | Pedestrian | 26  | 3    | 0.12     | FP
+3      | Pedestrian | 26  | -    | -        | Missed 25
+3      | Car        | 8   | 2    | 0.54     | TP
+3      | Car        | 8   | 2    | 0.40     | TP
+3      | Car        | 8   | -    | -        | Missed 6
+3      | Truck      | 1   | -    | -        | Missed 1
+4      | Pedestrian | 25  | 2    | 0.53     | TP
+4      | Pedestrian | 25  | 2    | 0.58     | TP
+4      | Pedestrian | 25  | -    | -        | Missed 23
+4      | Car        | 9   | 1    | 0.50     | TP
+4      | Car        | 9   | -    | -        | Missed 8
+4      | Truck      | 1   | -    | -        | Missed 1
+
+=====================================================================================
+  BENCHMARK REPORT: SCENE 1  
+=====================================================================================
+Class           | Precision  | Recall     | F1-Score   | Mean IoU   | Counts (TP/FP/FN) 
+-------------------------------------------------------------------------------------
+Pedestrian      | 0.82       | 0.08       | 0.14       | 0.53       | 9/2/108           
+Car             | 1.00       | 0.19       | 0.33       | 0.51       | 7/0/29            
+Truck           | 0.00       | 0.00       | 0.00       | 0.00       | 0/0/3             
+-------------------------------------------------------------------------------------
+AVERAGE         | -          | -          | 0.16       | 0.35       | -
+=====================================================================================
+```
+
 
 ## Acknowledgement
 - I would like to thank my advisor [Dr. K. Madhava Krishna](https://madhavak-iiith.github.io/), IIIT Hyderabad for guiding me through this project and also my collaborators for advice
@@ -349,5 +443,14 @@ uv run main.py
   title = {{SemanticKITTI: A Dataset for Semantic Scene Understanding of LiDAR Sequences}},
   booktitle = {Proc. of the IEEE/CVF International Conf.~on Computer Vision (ICCV)},
   year = {2019}
+}
+
+@INPROCEEDINGS{nuscenes,
+  title={nuScenes: A multimodal dataset for autonomous driving},
+  author={Holger Caesar and Varun Bankiti and Alex H. Lang and Sourabh Vora and 
+          Venice Erin Liong and Qiang Xu and Anush Krishnan and Yu Pan and 
+          Giancarlo Baldan and Oscar Beijbom}, 
+  booktitle={CVPR},
+  year=2020
 }
 ```
