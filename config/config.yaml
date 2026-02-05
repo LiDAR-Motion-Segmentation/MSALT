@@ -1,5 +1,5 @@
 defaults:
-  - msalt_setup: nuscenes
+  - msalt_setup: semantic_kitti
   - models: default
   - _self_
 
@@ -8,7 +8,7 @@ app:
   window_size: [1600, 900]
 
 output:
-  dir: "${hydra:runtime.cwd}/MSALT_outputs_annotations_nuscenes"
+  dir: "${hydra:runtime.cwd}/MSALT_outputs_annotations_kitti"
 
 labels:
   - name: "moving_people"
@@ -24,7 +24,7 @@ labels:
     hotkey: "3"
 
   - name: "static_car"
-    color: [0, 0, 255]        # Blue
+    color: [255, 255, 255]    # white
     hotkey: "4"
 
   - name: "moving_car"
