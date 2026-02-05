@@ -306,6 +306,13 @@ extensions:
   images: ".jpg"
   lidar: ".pcd.bin"
 ```
+- post the changes go to `config.yaml`, change the `msalt_setup` to
+```
+defaults:
+  - msalt_setup: nuscenes  
+  - models: default
+  - _self_
+```
 - to try it out use the steps below
 ```
 git checkout perf/nuscenes
@@ -318,6 +325,52 @@ uv run main.py
 ./msalt
 ```
 ![alt text](./assets/nuscenes_v2.png)
+
+## Semantic Kitti dataset Benchmarking
+- Make changes in the config paths in the same way in the `perf/nuscenes` branch code
+```
+name: "semantic_kitti"
+
+dataset_type: "semantic_kitti"
+
+# Dataset Settings
+paths:
+  root_dir: "/home/Downloads/semantic-kitty/sequences" 
+  sequence_id: "00"
+
+# Set to null to load ALL frames found in the folder
+num_frames: null
+iou_threshold: 0.5 
+
+# SemanticKITTI Class ID -> Label Name Mapping
+# IDs found in standard semantic-kitti.yaml API
+label_mapping:
+  10: "Car"        # car
+  11: "Car"        # bicycle
+  13: "Bus"        # bus
+  15: "Truck"      # truck
+  18: "Truck"      # construction vehicle
+  20: "Truck"      # other-vehicle
+  30: "Pedestrian" # person
+  31: "Cyclist"    # bicyclist
+  32: "Cyclist"    # motorcyclist
+  252: "Car"       # moving-car
+  253: "Cyclist"   # moving-bicyclist
+  254: "Pedestrian"# moving-person
+  255: "Cyclist"   # moving-motorcyclist
+  256: "Car"       # moving-on-rails
+  257: "Bus"       # moving-bus
+  258: "Truck"     # moving-truck
+  259: "Truck"     # moving-other-vehicle
+```
+- post the changes go to `config.yaml`, change the `msalt_setup` to the following and then run the tool.
+```
+defaults:
+  - msalt_setup: semantic-kitti  
+  - models: default
+  - _self_
+```
+![alt text](./assets/semantic-kitti.png)
 
 ### Benchmarking
 - You can click on `Compare Ground Truth` to see the ground truth bounding boxes in the viewer
