@@ -26,6 +26,10 @@ label_mapping:
   static_bus: "Bus"
   bus: "Bus"
 
+  moving_cyclist: "Cyclist"
+  static_cyclist: "Cyclist"
+  cyclist: "Cyclist"
+
   Car: "Car"
   Bus: "Bus"
   Truck: "Truck"

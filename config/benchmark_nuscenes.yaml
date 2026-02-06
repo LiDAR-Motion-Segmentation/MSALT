@@ -24,7 +24,12 @@ label_mapping:
   human.pedestrian.police_officer: "Pedestrian"
   
   # Large Vehicles
-  truck: "Truck"
+  moving_truck: "Truck"
+  static_truck: "Truck"
+  moving_construction_vehicle: "Truck"
+  static_construction_vehicle: "Truck"
+  moving_bus: "Bus"
+  static_bus: "Bus"
   vehicle.truck: "Truck"
   bus: "Bus"
   vehicle.bus.rigid: "Bus"
