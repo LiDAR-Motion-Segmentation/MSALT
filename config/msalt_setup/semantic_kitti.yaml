@@ -25,7 +25,7 @@ label_mapping:
   32: "Cyclist"    # motorcyclist
   252: "Car"       # moving-car
   253: "Cyclist"   # moving-bicyclist
-  254: "Pedestrian"# moving-person
+  254: "Pedestrian" # moving-person
   255: "Cyclist"   # moving-motorcyclist
   256: "Car"       # moving-on-rails
   257: "Bus"       # moving-bus
