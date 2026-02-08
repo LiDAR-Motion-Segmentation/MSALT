@@ -547,7 +547,7 @@ class MainWindow(QMainWindow):
                     )
 
                     if res:
-                        new_box.source_2d = {"cam_id": cam_id, "rect": res["rect"]}
+                        new_box.source_2d = {"cam_id": cam_id, "rect": res}
 
             # Save to Manager
             self.annotation_manager.add_box(next_idx, new_box)
