@@ -555,6 +555,7 @@ class MainWindow(QMainWindow):
 
         # Jump to the next frame so user can see the result
         self.load_frame(next_idx)
+        self.playback.slider.setValue(next_idx)
         self.save_current_work()
         self.statusBar().showMessage(
             f"Propagated {count} objects to Frame {next_idx}", 2000
