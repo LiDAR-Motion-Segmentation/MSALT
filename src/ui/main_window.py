@@ -517,7 +517,7 @@ class MainWindow(QMainWindow):
             # Clone the Box (Deep Copy)
             new_box = BoundingBox3D(
                 track_id=old_box.track_id,  # Keep ID same
-                label=old_box.label,  # Keep Label same
+                label=old_box.label,        # Keep Label same
                 x=old_box.x,
                 y=old_box.y,
                 z=old_box.z,
@@ -553,7 +553,7 @@ class MainWindow(QMainWindow):
                     )
 
                     if res:
-                        new_box.source_2d = {"cam_id": cam_id, "rect": res["rect"]}
+                        new_box.source_2d = {"cam_id": cam_id, "rect": res}
 
             # Save to Manager
             self.annotation_manager.add_box(next_idx, new_box)
