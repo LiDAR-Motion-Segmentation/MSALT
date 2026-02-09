@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         # Connect Signals
         self.automation_panel.propagate_requested.connect(self.propagate_selection)
         self.automation_panel.interpolate_requested.connect(self.interpolate_selection)
+        self.automation_panel.tracking_requested.connect(self.predict_forward_selection)
 
         # BOTTOM: Playback 
         self.playback = PlaybackWidget()
@@ -170,6 +171,10 @@ class MainWindow(QMainWindow):
         # Batch view (B)
         self.shortcut_batch = QShortcut(QKeySequence("B"), self)
         self.shortcut_batch.activated.connect(self.open_grid_view)
+        
+        # Forward Prediction (K)
+        self.shortcut_predict = QShortcut(QKeySequence("K"), self)
+        self.shortcut_predict.activated.connect(self.predict_forward_selection)
         
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
@@ -752,3 +757,29 @@ class MainWindow(QMainWindow):
             
         # update List
         self.list_panel.update_list(boxes)
+        
+    def predict_forward_selection(self):
+        """
+        Handler for Forward Prediction using Kalman filter (K).
+        """
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        selected_boxes = [b for b in current_boxes if b.selected]
+        
+        if not selected_boxes:
+            self.statusBar().showMessage("Select a box to predict forward.", 2000)
+            return
+        
+        horizon = getattr(self.automation_cfg, "track_horizon", 10)
+        total_filled  = 0
+        
+        for box in selected_boxes:
+            count = self.annotation_manager.run_forward_prediction(
+                box.track_id, 
+                self.current_frame_idx,
+                horizon=horizon
+            )
+            total_filled += count
+            
+        if total_filled > 0:
+            self.save_current_work()
+            self.statusBar().showMessage(f"Kalman predicted {total_filled} frames.", 3000)
