@@ -211,7 +211,7 @@ class MainWindow(QMainWindow):
         self.plugins.append(widget)
 
     def _connect_signals(self):
-        # Wiring the Playback -> Controller -> UI.
+        """ Wiring the Playback -> Controller -> UI. """
         self.playback.frame_changed.connect(self.load_frame)
         self.cam_widget.box_drawn.connect(self.handle_annotation)
         
@@ -288,8 +288,8 @@ class MainWindow(QMainWindow):
         # Auto-save after delete
         self.save_current_work()
         
-    # Update the slot definition to accept the bool
     def on_camera_box_drawn(self, cam_id: str, x: int, y: int, w: int, h: int, is_override: bool):
+        """ Update the slot definition to accept the bool"""
         self.handle_annotation(cam_id, x, y, w, h, is_override)
 
     def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int, is_override: bool):
@@ -309,7 +309,6 @@ class MainWindow(QMainWindow):
         
         if selected_box and not is_override:
             # We are about to create a new box, but one is selected.
-            # Just helpful UX logging, or auto-deselect logic if you prefer.
             self.annotation_manager.deselect_all()
             
         # Logic: Box -> SAM2 Mask -> 3D Projection -> Box Fit
@@ -541,7 +540,7 @@ class MainWindow(QMainWindow):
                     calib = next_data.metadata["calibration"][cam_id]
                     img_shape = next_data.images[cam_id].shape
 
-                    # Math Magic
+                    # Math Logic
                     res = GeometryUtils.project_box_to_image(
                         new_box, calib["extrinsic"], calib["intrinsic"], img_shape
                     )
