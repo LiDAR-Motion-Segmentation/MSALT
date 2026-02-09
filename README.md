@@ -39,7 +39,7 @@ chmod +x msalt
 # or use to run with uv
 uv run main.py
 ```
-![alt text](./assets/ui_v11.png)
+![alt text](./assets/ui_v12.png)
 
 ## Model weights
 - Download the SAM 2 checkpoints and place them in the checkpoints/ directory (create if missing).
@@ -50,9 +50,10 @@ uv run main.py
 | :--- | :--- | :--- |
 | **Navigation** | `Left Arrow` / `Right Arrow` | Previous / Next Frame |
 | **Selection** | `Left Click` (3D View) | Select a Bounding Box |
-| **Editing** | `Mouse Drag` (2D View) | Draw a new Box (Trigger SAM) |
+| **Editing** | `Mouse Drag` (2D View) | Draw a new Box (Trigger SAM2) |
 | **Automation** | `P` | **Propagate** selected box to next frame |
 | **Interpolation** | `I` | **Interpolate** selected box to next frame |
+| **Tracking** | `K` | **Track** selected box to next frame without images |
 | **Management** | `Del` | Delete selected box |
 | **System** | `Ctrl + S` | Force Save (Auto-save is on by default) |
 | **Undo** | `Ctrl + Z` | Undo changes |
