@@ -595,3 +595,35 @@ class GeometryUtils:
         new_box.heading = new_heading
         
         return new_box
+    
+    @staticmethod
+    def extrapolate_box(box: 'BoundingBox3D', velocity: dict, steps: int) -> 'BoundingBox3D':
+        """
+        Projects a box 'steps' frames into the future based on a velocity vector.
+        velocity = {'x': float, 'y': float, 'z': float, 'heading': float}
+        """
+        
+        # Linear projection
+        new_x = box.x + (velocity['x'] * steps)
+        new_y = box.y + (velocity['y'] * steps)
+        new_z = box.z + (velocity['z'] * steps)
+        
+        # Heading projection (Simple addition, normalization happens usually at render time 
+        # but good to normalize here to stay within -pi/pi)
+        new_heading = box.heading + (velocity['heading'] * steps)
+        while new_heading > np.pi: 
+            new_heading -= 2 * np.pi
+        while new_heading < -np.pi: 
+            new_heading += 2 * np.pi
+
+        return BoundingBox3D(
+            track_id=box.track_id,
+            label=box.label,
+            x=new_x, 
+            y=new_y, 
+            z=new_z,
+            dx=box.dx,  # Dimensions usually don't change
+            dy=box.dy,
+            dz=box.dz,
+            heading=new_heading
+        )

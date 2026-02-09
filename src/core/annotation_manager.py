@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 from copy import deepcopy
 from src.core.geometry import GeometryUtils
+from src.core.tracker import KalmanBoxTracker
 
 logger = logging.getLogger(__name__)
 
@@ -355,3 +356,67 @@ class AnnotationManager:
         uid = self._next_id
         self._next_id += 1
         return uid
+
+    def run_forward_prediction(self, track_id: int, current_frame_idx: int, horizon: int = 10) -> int:
+        """
+        Predicts future frames using a Kalman Filter (Constant Velocity).
+        Warms up on previous frames to learn velocity.
+        """
+        # Gather History (Look back 5 frames to learn motion)
+        history_boxes = []
+        # We look back up to 5 frames, PLUS the current frame
+        for f_idx in range(current_frame_idx - 5, current_frame_idx + 1):
+            if f_idx < 0: 
+                continue
+            
+            boxes = self.get_boxes(f_idx)
+            # Find the box with the matching ID
+            box = next((b for b in boxes if b.track_id == track_id), None)
+            if box:
+                history_boxes.append(box)
+        
+        if not history_boxes:
+            logger.warning(f"ID {track_id}: No history found to predict velocity.")
+            return 0
+            
+        # Initialize and Warm Up Tracker
+        # Start with the oldest known box
+        tracker = KalmanBoxTracker(history_boxes[0])
+        
+        # "Replay" history to converge velocity estimate
+        for box in history_boxes[1:]:
+            tracker.predict() # Step forward
+            tracker.update(box) # Correct with known data
+            
+        # Predict Future
+        # We use the dimensions/label from the most recent box (current frame)
+        template_box = history_boxes[-1] 
+        count = 0
+        
+        logger.info(f"Predicting ID {track_id} for {horizon} frames using Kalman filter...")
+        
+        for i in range(1, horizon + 1):
+            target_frame = current_frame_idx + i
+            
+            # Predict next step
+            pred_box = tracker.predict()
+            
+            # Construct the final box (combining predicted pos with template dims)
+            final_box = BoundingBox3D(
+                track_id=track_id,
+                label=template_box.label,
+                x=pred_box.x,
+                y=pred_box.y,
+                z=pred_box.z,
+                dx=template_box.dx, # Keep dimensions constant
+                dy=template_box.dy,
+                dz=template_box.dz,
+                heading=pred_box.heading
+            )
+            
+            # Add to manager (Overwriting if exists)
+            self.remove_box(target_frame, track_id)
+            self.add_box(target_frame, final_box)
+            count += 1
+            
+        return count

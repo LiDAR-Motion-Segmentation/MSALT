@@ -6,6 +6,7 @@ class AutomationPanel(QWidget):
     propagate_requested = pyqtSignal()
     interpolate_requested = pyqtSignal()
     grid_view_requested = pyqtSignal()
+    tracking_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -43,7 +44,7 @@ class AutomationPanel(QWidget):
         layout.addWidget(self.btn_propagate)
 
         # interpolate button
-        self.btn_interp = QPushButton("Interpolate (I)")
+        self.btn_interp = QPushButton("SAM2 Interpolation (I)")
         self.btn_interp.setToolTip("Linearly fill gaps between previous frame and this one")
         self.btn_interp.clicked.connect(self.interpolate_requested.emit)
         
@@ -63,6 +64,21 @@ class AutomationPanel(QWidget):
             }
         """)
         layout.addWidget(self.btn_interp)
+
+        # Kalman filter
+        self.btn_linear = QPushButton("Kalman Filter Tracking (K)")
+        self.btn_linear.setStyleSheet("""
+            QPushButton {
+                background-color: #008080;  /* Teal */
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #20B2AA; } /* Light Sea Green */
+        """)
+        self.btn_linear.clicked.connect(self.tracking_requested.emit)
+        layout.addWidget(self.btn_linear)
 
         layout.addStretch()
         self.setLayout(layout)

@@ -20,6 +20,9 @@ jobs:
       uses: astral-sh/setup-uv@v4
       with:
         enable-cache: true
+        version: "0.10.0"
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        cache-dependency-glob: "**/uv.lock"
 
     # 3. Install Python
     - name: Set up Python
