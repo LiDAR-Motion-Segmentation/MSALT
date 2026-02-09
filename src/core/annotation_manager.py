@@ -26,7 +26,7 @@ class AnnotationManager:
         if frame_idx not in self.annotations:
             self.annotations[frame_idx] = []
 
-        # # Simple ID assignment if not tracked (1, 2, 3...)
+        # Simple ID assignment if not tracked (1, 2, 3...)
         if box.track_id == -1:
             box.track_id = self._next_id
             self._next_id += 1
