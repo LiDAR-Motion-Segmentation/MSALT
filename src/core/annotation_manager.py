@@ -366,7 +366,8 @@ class AnnotationManager:
         history_boxes = []
         # We look back up to 5 frames, PLUS the current frame
         for f_idx in range(current_frame_idx - 5, current_frame_idx + 1):
-            if f_idx < 0: continue
+            if f_idx < 0: 
+                continue
             
             boxes = self.get_boxes(f_idx)
             # Find the box with the matching ID

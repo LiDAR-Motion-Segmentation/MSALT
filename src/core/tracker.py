@@ -66,8 +66,8 @@ class KalmanBoxTracker:
         self.x = self.x + (K @ y)
         
         # update covariance: P = (I - KH)P
-        I = np.eye(8)
-        self.P = (I - (K @ self.H)) @ self.P
+        identity = np.eye(8)
+        self.P = (identity - (K @ self.H)) @ self.P
         
     def predict(self) -> BoundingBox3D:
         """
