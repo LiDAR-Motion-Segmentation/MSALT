@@ -12,11 +12,12 @@ logger = logging.getLogger(__name__)
 class AnnotationManager:
     def __init__(self) -> None:
         # Master storage: Frame Index -> List of Boxes
-        self.annotations: Dict[int, List[BoundingBox3D]] = {}
+        self.annotations: Dict[int, List[BoundingBox3D]] = {} # {frame_idx: [BoundingBox3D, ...]}
         
         # Store paths for saving later
         self.boxes_dir = None
         self.meta_dir = None
+        self._next_id = 1
 
     def get_boxes(self, frame_idx: int):
         return self.annotations.get(frame_idx, [])
@@ -27,9 +28,15 @@ class AnnotationManager:
 
         # Simple ID assignment if not tracked (1, 2, 3...)
         if box.track_id == -1:
-            box.track_id = len(self.annotations[frame_idx]) + 1
+            box.track_id = self._next_id
+            self._next_id += 1
 
+        # If the added box has an ID >= our current counter, jump ahead.
+        if box.track_id >= self._next_id:
+            self._next_id = box.track_id + 1
+        
         self.annotations[frame_idx].append(box)
+        self.annotations[frame_idx].sort(key=lambda b: b.track_id)
 
     def delete_box(self, frame_idx: int, box: BoundingBox3D):
         if frame_idx in self.annotations:
@@ -157,6 +164,16 @@ class AnnotationManager:
             if loaded_boxes:
                 self.annotations[frame_idx] = loaded_boxes
                 count += len(loaded_boxes)
+                
+        # Scan ALL loaded boxes to find the highest ID used so far
+        max_id = 0
+        for frame_idx, boxes in self.annotations.items():
+            for box in boxes:
+                if box.track_id > max_id:
+                    max_id = box.track_id
+        
+        # Ensure new boxes always get a fresh ID after loading
+        self._next_id = max_id + 1 if max_id > 0 else 1
 
         logger.info(f"Loaded {count} boxes from {boxes_dir}")
 
@@ -329,3 +346,12 @@ class AnnotationManager:
         for frame_idx, boxes in self.annotations.items():
             for box in boxes:
                 box.selected = False
+                
+    def get_unique_id(self) -> int:
+        """
+        Returns the next available unique ID and increments the counter.
+        Call this when creating a BRAND NEW box from the UI.
+        """
+        uid = self._next_id
+        self._next_id += 1
+        return uid

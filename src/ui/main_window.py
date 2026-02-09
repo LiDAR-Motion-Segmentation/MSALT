@@ -86,7 +86,6 @@ class MainWindow(QMainWindow):
         self.add_dock(self.cam_widget, "Cameras", Qt.DockWidgetArea.TopDockWidgetArea)
 
         # LEFT: Automation Panel 
-        # Initialize this HERE before connecting signals
         self.automation_panel = AutomationPanel()
         self.add_dock(
             self.automation_panel, "Automation", Qt.DockWidgetArea.LeftDockWidgetArea
@@ -130,12 +129,13 @@ class MainWindow(QMainWindow):
         save_action.triggered.connect(self.save_current_work)
         self.addAction(save_action)
         
-        # Undo (Ctrl+Z) and Redo (Ctrl+Y)
+        # Undo (Ctrl+Z) 
         undo_action = QAction("Undo", self)
         undo_action.setShortcut(QKeySequence("Ctrl+Z"))
         undo_action.triggered.connect(self.undo_action)
         self.addAction(undo_action)
         
+        # Redo (Ctrl+Y)
         redo_action = QAction("Redo", self)
         redo_action.setShortcut(QKeySequence("Ctrl+Y")) 
         redo_action.triggered.connect(self.redo_action)
@@ -211,7 +211,7 @@ class MainWindow(QMainWindow):
         self.plugins.append(widget)
 
     def _connect_signals(self):
-        # Wiring the Playback -> Controller -> UI.
+        """ Wiring the Playback -> Controller -> UI. """
         self.playback.frame_changed.connect(self.load_frame)
         self.cam_widget.box_drawn.connect(self.handle_annotation)
         
@@ -241,7 +241,6 @@ class MainWindow(QMainWindow):
         # Explicitly deselect all boxes when entering a new frame.
         for b in boxes:
             b.selected = False
-        
 
         # update for plugins
         for plugin in self.plugins:
@@ -267,6 +266,7 @@ class MainWindow(QMainWindow):
         current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
         for b in current_boxes:
             b.selected = b == box
+            
         # Redraw
         self.lidar_widget.update_boxes(current_boxes)
 
@@ -288,8 +288,8 @@ class MainWindow(QMainWindow):
         # Auto-save after delete
         self.save_current_work()
         
-    # Update the slot definition to accept the bool
     def on_camera_box_drawn(self, cam_id: str, x: int, y: int, w: int, h: int, is_override: bool):
+        """ Update the slot definition to accept the bool"""
         self.handle_annotation(cam_id, x, y, w, h, is_override)
 
     def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int, is_override: bool):
@@ -309,7 +309,6 @@ class MainWindow(QMainWindow):
         
         if selected_box and not is_override:
             # We are about to create a new box, but one is selected.
-            # Just helpful UX logging, or auto-deselect logic if you prefer.
             self.annotation_manager.deselect_all()
             
         # Logic: Box -> SAM2 Mask -> 3D Projection -> Box Fit
@@ -541,7 +540,7 @@ class MainWindow(QMainWindow):
                     calib = next_data.metadata["calibration"][cam_id]
                     img_shape = next_data.images[cam_id].shape
 
-                    # Math Magic
+                    # Math Logic
                     res = GeometryUtils.project_box_to_image(
                         new_box, calib["extrinsic"], calib["intrinsic"], img_shape
                     )
@@ -710,8 +709,12 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Refined {count} boxes via PCA.", 2000)
             
     def handle_3d_annotation(self, cx, cy, cz, dx, dy, dz, heading):
+        # Ask Manager for a fresh ID
+        track_id = self.annotation_manager.get_unique_id()
+        
         # create box
         new_box = BoundingBox3D(
+            track_id=track_id,
             x=cx,
             y=cy,
             z=cz,
