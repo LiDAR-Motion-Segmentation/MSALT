@@ -36,6 +36,12 @@ class KalmanBoxTracker:
         # Process Noise (Q) - Uncertainty in the model
         self.Q = np.eye(8) * 0.01
         
+    def normalize_angle(self, angle):
+        """
+        Normalize angle to be within [-pi, pi].
+        """
+        return (angle + np.pi) % (2 * np.pi) - np.pi
+        
     def update(self, box: BoundingBox3D):
         """
         Correction Step: Update state with a ground-truth measurement.
@@ -46,12 +52,8 @@ class KalmanBoxTracker:
         # Innovation (Residual): y = z - Hx
         y = z - (self.H @ self.x)
         
-        # Fix Cyclic Heading Error (-pi to pi)
-        # If prediction is 179° and measurement is -179°, difference should be 2°, not 358°
-        while y[3, 0] > np.pi: 
-            y[3, 0] -= 2 * np.pi
-        while y[3, 0] < -np.pi: 
-            y[3, 0] += 2 * np.pi
+        # This handles the jump from 3.13 -> -3.13 correctly as a 0.02 change.
+        y[3, 0] = self.normalize_angle(y[3, 0])
             
         # Kalman Gain: K = PH' * inv(HPH' + R)
         S = (self.H @ self.P @ self.H.T) + self.R
