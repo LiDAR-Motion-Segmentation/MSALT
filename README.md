@@ -397,7 +397,7 @@ uv run main.py
 # OR
 ./msalt
 ```
-![alt text](./assets/nuscenes_v2.png)
+![alt text](./assets/nuscenes-v3.png)
 
 ## Semantic Kitti dataset Benchmarking
 - Make changes in the config paths in the same way in the `perf/nuscenes` branch code
@@ -443,7 +443,7 @@ defaults:
   - models: default
   - _self_
 ```
-![alt text](./assets/semantic-kitti.png)
+![alt text](./assets/semantic-kitti-v2.png)
 
 ### Benchmarking
 - You can click on `Compare Ground Truth` to see the ground truth bounding boxes in the viewer

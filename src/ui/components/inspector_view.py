@@ -22,7 +22,7 @@ class InspectorWidget(QWidget):
         self._init_ui()
 
     def _create_spinner(
-        self, min_val=-100.0, max_val=100.0, step=0.05
+        self, min_val=-500.0, max_val=500.0, step=0.05
     ) -> QDoubleSpinBox:
         s = QDoubleSpinBox()
         s.setRange(min_val, max_val)
