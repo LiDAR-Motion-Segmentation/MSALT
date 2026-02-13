@@ -484,50 +484,17 @@ label_mapping:
 - after this you can run `benchmark/benchmark_nuscenes.py` to generate the results for precision, recall, F1-score and mean IoU for a scene and a series of sequences
 ```
 valuating 5 frames for Scene 1...
-Frame  | Class      | GT  | Pred | Best IoU | Status
------------------------------------------------------------------
-0      | Pedestrian | 19  | 2    | 0.56     | TP
-0      | Pedestrian | 19  | 2    | 0.33     | TP
-0      | Pedestrian | 19  | -    | -        | Missed 17
-0      | Car        | 4   | 2    | 0.53     | TP
-0      | Car        | 4   | 2    | 0.62     | TP
-0      | Car        | 4   | -    | -        | Missed 2
-1      | Pedestrian | 23  | 2    | 0.62     | TP
-1      | Pedestrian | 23  | 2    | 0.79     | TP
-1      | Pedestrian | 23  | -    | -        | Missed 21
-1      | Car        | 7   | 1    | 0.48     | TP
-1      | Car        | 7   | -    | -        | Missed 6
-2      | Pedestrian | 24  | 2    | 0.56     | TP
-2      | Pedestrian | 24  | 2    | 0.33     | TP
-2      | Pedestrian | 24  | -    | -        | Missed 22
-2      | Car        | 8   | 1    | 0.51     | TP
-2      | Car        | 8   | -    | -        | Missed 7
-2      | Truck      | 1   | -    | -        | Missed 1
-3      | Pedestrian | 26  | 3    | 0.25     | FP
-3      | Pedestrian | 26  | 3    | 0.44     | TP
-3      | Pedestrian | 26  | 3    | 0.12     | FP
-3      | Pedestrian | 26  | -    | -        | Missed 25
-3      | Car        | 8   | 2    | 0.54     | TP
-3      | Car        | 8   | 2    | 0.40     | TP
-3      | Car        | 8   | -    | -        | Missed 6
-3      | Truck      | 1   | -    | -        | Missed 1
-4      | Pedestrian | 25  | 2    | 0.53     | TP
-4      | Pedestrian | 25  | 2    | 0.58     | TP
-4      | Pedestrian | 25  | -    | -        | Missed 23
-4      | Car        | 9   | 1    | 0.50     | TP
-4      | Car        | 9   | -    | -        | Missed 8
-4      | Truck      | 1   | -    | -        | Missed 1
 
 =====================================================================================
   BENCHMARK REPORT: SCENE 1  
 =====================================================================================
 Class           | Precision  | Recall     | F1-Score   | Mean IoU   | Counts (TP/FP/FN) 
 -------------------------------------------------------------------------------------
-Pedestrian      | 0.82       | 0.08       | 0.14       | 0.53       | 9/2/108           
-Car             | 1.00       | 0.19       | 0.33       | 0.51       | 7/0/29            
-Truck           | 0.00       | 0.00       | 0.00       | 0.00       | 0/0/3             
+Pedestrian      | 0.95       | 0.97       | 0.96       | 0.70       | 113/6/4           
+Car             | 1.00       | 1.00       | 1.00       | 0.78       | 36/0/0            
+Truck           | 1.00       | 1.00       | 1.00       | 0.83       | 3/0/0             
 -------------------------------------------------------------------------------------
-AVERAGE         | -          | -          | 0.16       | 0.35       | -
+AVERAGE         | -          | -          | 0.99       | 0.77       | -
 =====================================================================================
 ```
 
