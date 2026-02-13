@@ -484,7 +484,7 @@ label_mapping:
 ```
 - after this you can run `benchmark/benchmark_nuscenes.py` to generate the results for precision, recall, F1-score and mean IoU for a scene and a series of sequences
 ```
-valuating 5 frames for Scene 1...
+evaluating 5 frames for Scene 1...
 
 =====================================================================================
   BENCHMARK REPORT: SCENE 1  
