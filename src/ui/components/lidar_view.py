@@ -499,7 +499,8 @@ class LidarVisualizer(BasePluginWidget):
         
         ray_dir = ray_far - ray_origin
         norm = np.linalg.norm(ray_dir)
-        if norm < 1e-6: return
+        if norm < 1e-6: 
+            return
         ray_dir /= norm  # Normalize direction vector
         
         # Raycast against all current bounding boxes
