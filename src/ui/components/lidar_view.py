@@ -303,6 +303,8 @@ class CustomGLWidget(gl.GLViewWidget):
         painter.end()      
         
 class LidarVisualizer(BasePluginWidget):
+    box_selected_3d = pyqtSignal(int)
+    
     def __init__(self, parent=None, cfg=None):
         super().__init__(parent)
         # Configuration for ground plane estimation and defaults
@@ -317,6 +319,10 @@ class LidarVisualizer(BasePluginWidget):
         self.debug_items = []
         self.label_color_map = {}
         self.current_points = None
+        
+        # Intercept the mouse release event to detect clicks
+        self._original_mouse_release = self.view_widget.mouseReleaseEvent
+        self.view_widget.mouseReleaseEvent = self._on_gl_mouse_release
         
     def set_label_colors(self, label_config: List[Dict]):
         """
@@ -376,6 +382,9 @@ class LidarVisualizer(BasePluginWidget):
 
     def update_boxes(self, boxes: list[BoundingBox3D]):
         self.view_widget.overlay_boxes = boxes
+        
+        # Save a reference to the boxes so we can test against them later
+        self.current_boxes = boxes
         
         # clear old boxes
         for item in self.box_items:
@@ -455,3 +464,54 @@ class LidarVisualizer(BasePluginWidget):
     def get_box_color(self, box):
         if box.selected:
             return (1, 1, 0, 1) # Yellow
+        
+    def _on_gl_mouse_release(self, ev):
+        # Ensure the camera pan/rotate still works natively
+        self._original_mouse_release(ev)
+        
+        # Only trigger selection on Left Click (Modify to Shift+Click if you prefer)
+        if ev.button() != Qt.MouseButton.LeftButton:
+            return
+            
+        # Get 2D Pixel Coordinates
+        pos = ev.pos()
+        rect = self.view_widget.rect()
+        
+        # Convert to Normalized Device Coordinates (NDC) [-1 to 1]
+        ndc_x = (2.0 * pos.x() / rect.width()) - 1.0
+        ndc_y = 1.0 - (2.0 * pos.y() / rect.height())
+        
+        # Get the Inverse View-Projection Matrix to unproject the 2D point
+        proj = self.view_widget.projectionMatrix(rect.getRect(), rect.getRect())
+        view = self.view_widget.viewMatrix()
+        vp_matrix = proj * view
+        inv_vp, invertible = vp_matrix.inverted()
+        
+        if not invertible:
+            return
+            
+        # Unproject Near (z=-1) and Far (z=1) points to create the 3D Ray
+        near_pt = inv_vp.map(QVector3D(ndc_x, ndc_y, -1.0))
+        far_pt = inv_vp.map(QVector3D(ndc_x, ndc_y, 1.0))
+        
+        ray_origin = np.array([near_pt.x(), near_pt.y(), near_pt.z()])
+        ray_far = np.array([far_pt.x(), far_pt.y(), far_pt.z()])
+        
+        ray_dir = ray_far - ray_origin
+        norm = np.linalg.norm(ray_dir)
+        if norm < 1e-6: return
+        ray_dir /= norm  # Normalize direction vector
+        
+        # Raycast against all current bounding boxes
+        closest_hit_id = -1
+        min_dist = np.inf
+        
+        for box in self.current_boxes:
+            hit, dist = GeometryUtils.ray_intersects_obb(ray_origin, ray_dir, box)
+            if hit and dist < min_dist:
+                min_dist = dist
+                closest_hit_id = box.track_id
+                
+        # Emit the selected ID to the main window
+        if closest_hit_id != -1:
+            self.box_selected_3d.emit(closest_hit_id)
