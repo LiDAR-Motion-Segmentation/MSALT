@@ -420,3 +420,16 @@ class AnnotationManager:
             count += 1
             
         return count
+    
+    def select_box(self, frame_idx: int, track_id: int, exclusive: bool = True):
+        """
+        Marks a specific bounding box as selected.
+        If exclusive is True, deselects all other boxes in the frame.
+        """
+        boxes = self.get_boxes(frame_idx)
+        
+        for box in boxes:
+            if box.track_id == track_id:
+                box.selected = True
+            elif exclusive:
+                box.selected = False
