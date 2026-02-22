@@ -300,6 +300,21 @@ uv run pytest
 1. `test_interpolate_box_midpoint`: checks that interpolate_box at `t=0.5` produces the geometric midpoint and halfway heading.
 2. `test_refine_heading_returns_current_when_too_few_points`: ensures refine_heading returns the original heading for very small point sets (<5).
 
+### UI components tests (`test_ui_components.py`)
+- Uses an offscreen Qt platform (QT_QPA_PLATFORM="offscreen") and dummy classes (DummyViewWidget, DummyScatter) to test CameraStripWidget and LidarVisualizer without the overhead or instability of full GUI rendering.
+
+1. `test_camera_strip_frame_update_sets_resolution_and_pixmap`: Verifies that when a new frame is loaded, the camera strip correctly updates the original image dimensions and sets the Qt pixmap.
+
+2. `test_camera_strip_box_signal_includes_shift_override`: Mocks the Qt keyboard modifiers to simulate holding the Shift key, ensuring the box_drawn signal correctly emits a True flag for the shift override.
+
+3. `test_camera_strip_update_3d_projection_updates_only_calibrated_camera`: Ensures that 3D projection updates strictly apply intrinsic and extrinsic matrices to cameras that have calibration data, correctly ignoring uncalibrated views.
+
+4. `test_lidar_on_frame_update_sets_ground_plane_and_draws_when_no_boxes`: Validates that loading a new point cloud calculates the ground plane Z-height (using the 50th percentile minus a bias) and triggers the default point rendering when no boxes exist.
+
+5. `test_lidar_draw_points_default_sets_scatter_data`: Checks that the default rendering correctly passes the point cloud coordinates, sizes, and base colors to the pyqtgraph scatter plot item.
+
+6. `test_lidar_update_boxes_recolors_points_and_rebuilds_line_items`: Mocks the point-in-box math to verify that points inside a bounding box are dynamically recolored to match the label's color map. It also ensures old 3D box lines are cleared and new ones are added to the view widget.
+
 ## Docker (Devcontainer)
 ### Prerequisites
 
