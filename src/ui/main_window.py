@@ -176,6 +176,9 @@ class MainWindow(QMainWindow):
         self.shortcut_predict = QShortcut(QKeySequence("K"), self)
         self.shortcut_predict.activated.connect(self.predict_forward_selection)
         
+        # Connect the 3D click signal to your selection handler
+        self.lidar_widget.box_selected_3d.connect(self.select_box_from_3d)
+        
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
 
@@ -783,3 +786,21 @@ class MainWindow(QMainWindow):
         if total_filled > 0:
             self.save_current_work()
             self.statusBar().showMessage(f"Kalman predicted {total_filled} frames.", 3000)
+            
+    def select_box_from_3d(self, track_id: int):
+        """Handler for when a box is clicked directly in the 3D view."""
+        # Tell the manager to exclusively select this ID
+        self.annotation_manager.select_box(self.current_frame_idx, track_id, exclusive=True)
+        
+        # Find the actual BoundingBox3D object for this track_id
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        selected_box = next((b for b in current_boxes if b.track_id == track_id), None)
+        
+        if selected_box:
+            # Trigger your existing handler to update the Inspector panel
+            # (Passing the OBJECT now, not the integer)
+            self.on_box_selected(selected_box) 
+            
+            # Visually update the UI list
+            self.refresh_views_only()
+            self.statusBar().showMessage(f"Selected Box ID: {track_id}", 2000)
