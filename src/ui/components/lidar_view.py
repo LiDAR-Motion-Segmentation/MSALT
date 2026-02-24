@@ -44,14 +44,16 @@ class CustomGLWidget(gl.GLViewWidget):
         
         # Data Storage
         self.overlay_boxes = []
+        self.gt_boxes = []
 
         # Drawing State
         self.state = DrawState.IDLE
-        self.draw_start_pt = None   # [x, y, z]
-        self.draw_end_pt = None     # [x, y, z]
+        self.base_points = []         # List of clicked [x, y, z] points
+        self.current_mouse_pt = None  
+                
         self.draw_ground_z = None   # Z of ground for current draw (set from first click)
-        self.draw_height = 1.5      # Default height
-        self.ground_z = -1.5        # Default ground plane for first ray cast (can be overridden by config)
+        self.draw_height = 0      # Default height
+        self.ground_z = 0       # Default ground plane for first ray cast (can be overridden by config)
         self._height_drag_start_y = None  # For mouse-drag height adjustment
 
         # Ghost Box (Visual Feedback while drawing)
@@ -59,23 +61,14 @@ class CustomGLWidget(gl.GLViewWidget):
         self.ghost_box.setVisible(False)
         self.addItem(self.ghost_box)
         
-    def _get_matrices_np(self):
-        """Helper to extract OpenGL matrices as Numpy arrays."""
-        # View Matrix (World -> Camera)
-        v_data = self.viewMatrix().data() # Tuple of 16 floats
-        view_mat = np.array(v_data, dtype=np.float32).reshape(4, 4)
+        self.ghost_pts = gl.GLScatterPlotItem(color=(1, 1, 0, 1), size=6) # Yellow dots
+        self.ghost_pts.setVisible(False)
+        self.addItem(self.ghost_pts)
         
-        # Projection Matrix (Camera -> Clip)
-        w = self.width()
-        h = self.height()
-        fov = self.opts.get('fov', 60)
-        dist = self.opts.get('distance', 20)
-        
-        qt_proj_mat = get_projection_matrix(w, h, fov, dist)
-        p_data = qt_proj_mat.data()
-        proj_mat = np.array(p_data, dtype=np.float32).reshape(4, 4)
-        
-        return view_mat.T, proj_mat.T
+        # This helps confirm if your Lidar is rotated correctly.
+        axis = gl.GLAxisItem()
+        axis.setSize(3, 3, 3)
+        self.addItem(axis)
 
     def _screen_to_ray_qt(self, mouse_x: int, mouse_y: int) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -84,65 +77,132 @@ class CustomGLWidget(gl.GLViewWidget):
         `QVector3D.project()` returns coordinates with Y-up, so we flip the incoming
         mouse Y (top-left) into window coordinates (bottom-left) before unproject.
         """
-        # Account for HiDPI: mouse events are in logical coords; viewport/unproject expects device pixels.
-        dpr = float(getattr(self, "devicePixelRatioF", lambda: 1.0)())
+        rect = self.rect()
         w = self.width()
         h = self.height()
         if w <= 0 or h <= 0:
             return np.zeros(3), np.array([0.0, 0.0, 1.0], dtype=np.float32)
 
-        w_px = int(round(w * dpr))
-        h_px = int(round(h * dpr))
-        mx = float(mouse_x) * dpr
-        my = float(mouse_y) * dpr
+        # Normalized Device Coordinates [-1 to 1]
+        ndc_x = (2.0 * mouse_x / w) - 1.0
+        ndc_y = 1.0 - (2.0 * mouse_y / h)
 
-        view_matrix = self.viewMatrix()
-        proj_matrix = get_projection_matrix(w_px, h_px, self.opts.get("fov", 60), self.opts.get("distance", 20))
-        viewport = QRect(0, 0, w_px, h_px)
+        # Extract EXACT matrices used for rendering
+        proj = self.projectionMatrix(rect.getRect(), rect.getRect())
+        view = self.viewMatrix()
+        inv_vp, invertible = (proj * view).inverted()
 
-        win_y = h_px - my
-        near = QVector3D(mx, win_y, 0.0).unproject(view_matrix, proj_matrix, viewport)
-        far = QVector3D(mx, win_y, 1.0).unproject(view_matrix, proj_matrix, viewport)
+        if not invertible:
+            return np.zeros(3), np.array([0.0, 0.0, 1.0], dtype=np.float32)
 
-        origin = np.array([near.x(), near.y(), near.z()], dtype=np.float32)
-        end = np.array([far.x(), far.y(), far.z()], dtype=np.float32)
-        direction = end - origin
-        norm = float(np.linalg.norm(direction))
-        if norm > 1e-12:
-            direction /= norm
-        else:
-            direction = np.array([0.0, 0.0, 1.0], dtype=np.float32)
-        return origin, direction
+        near_pt = inv_vp.map(QVector3D(ndc_x, ndc_y, -1.0))
+        far_pt = inv_vp.map(QVector3D(ndc_x, ndc_y, 1.0))
+
+        origin = np.array([near_pt.x(), near_pt.y(), near_pt.z()], dtype=np.float32)
+        end = np.array([far_pt.x(), far_pt.y(), far_pt.z()], dtype=np.float32)
         
+        direction = end - origin
+        norm = np.linalg.norm(direction)
+        direction = direction / norm if norm > 1e-12 else np.array([0.0, 0.0, 1.0], dtype=np.float32)
+        
+        return origin, direction
+    
+    def _calculate_obb(self):
+        """Calculates Center, Dims, and Heading from 1 to 4 base points."""
+        if len(self.base_points) == 0:
+            return None
+        
+        p1 = self.base_points[0]
+        p2 = self.current_mouse_pt if len(self.base_points) == 1 else self.base_points[1]
+        if p2 is None: 
+            p2 = p1
+            
+        dx = max(0.01, np.linalg.norm(p2[:2] - p1[:2]))
+        heading = np.arctan2(p2[1] - p1[1], p2[0] - p1[0])
+        
+        # Snaps to perfectly straight 0, 90, 180, 270 degrees if within 4 degrees
+        snap_rad = np.radians(4.0)
+        for target in [0, np.pi/2, np.pi, -np.pi/2, -np.pi]:
+            if abs(heading - target) < snap_rad:
+                heading = target
+                # Override p2 visually so the yellow dot snaps into perfect alignment
+                p2 = p1.copy()
+                p2[0] += dx * np.cos(heading)
+                p2[1] += dx * np.sin(heading)
+                break
+                
+        if len(self.base_points) == 1:
+            cx, cy = (p1[0] + p2[0]) / 2.0, (p1[1] + p2[1]) / 2.0
+            return cx, cy, self.draw_ground_z, dx, 0.01, heading
+            
+        p3 = self.base_points[2] if len(self.base_points) > 2 else self.current_mouse_pt
+        if p3 is not None:
+            v_perp = np.array([-np.sin(heading), np.cos(heading)])
+            dy_vector = p3[:2] - p1[:2]
+            dy = abs(np.dot(dy_vector, v_perp))
+            if dy < 0.01: 
+                dy = 0.01
+            
+            sign = np.sign(np.dot(dy_vector, v_perp))
+            if sign == 0: 
+                sign = 1
+            
+            midpoint = (p1 + p2) / 2.0
+            center_xy = midpoint[:2] + v_perp * sign * (dy / 2.0)
+        else:
+            dy = 0.01
+            center_xy = (p1[:2] + p2[:2]) / 2.0
+
+        return center_xy[0], center_xy[1], self.draw_ground_z, dx, dy, heading
+            
     def mousePressEvent(self, event):
         # using ctrl+left click start the process
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             if event.button() == Qt.MouseButton.LeftButton:
                 logger.info(f"Ctrl+Click detected at {event.pos()}")
+                origin, direction = self._screen_to_ray_qt(event.pos().x(), event.pos().y())
+                
                 if self.state == DrawState.IDLE:
-                    origin, direction = self._screen_to_ray_qt(event.pos().x(), event.pos().y())
-                    
                     hit = GeometryUtils.intersect_ray_plane(origin, direction, self.ground_z)
                     
                     if hit is not None:
                         logger.info("State changed to DRAGGING_BASE")
                         self.state = DrawState.DRAGGING_BASE
-                        self.draw_start_pt = hit.copy()
-                        self.draw_end_pt = hit.copy()
-                        self.draw_ground_z = float(hit[2])  # Use clicked point's Z as ground for this box
-                        self.draw_height = 0.0  # start flat
+                        self.base_points = [hit.copy()]
+                        self.draw_ground_z = float(hit[2])
+                        self.draw_height = 0.01
                         self._update_ghost_box()
+                        
                     else:
                         logger.info("Ray missed the ground plane!")
+                        
+                elif self.state == DrawState.DRAGGING_BASE:
+                    hit = GeometryUtils.intersect_ray_plane(origin, direction, self.draw_ground_z)
+                    if hit is not None:
+                        # Append the magnetically snapped point if it's point 2
+                        if len(self.base_points) == 1:
+                            obb = self._calculate_obb()
+                            if obb:
+                                heading = obb[5]
+                                dx = obb[3]
+                                hit = self.base_points[0].copy()
+                                hit[0] += dx * np.cos(heading)
+                                hit[1] += dx * np.sin(heading)
+                        
+                        self.base_points.append(hit.copy())
+                        if len(self.base_points) == 4:
+                            self.state = DrawState.SETTING_HEIGHT
+                            self.draw_height = 1.6  # Extrude visually
+                        self._update_ghost_box()
                         
                 elif self.state == DrawState.SETTING_HEIGHT:
                     # finish drawing
                     self._finalize_drawing()
                     self._reset_draw_state()
-                    self.ghost_box.setVisible(False)
-                    event.accept()
-                    return
-            event.accept()
+
+                event.accept()
+                return
+                
         else:
             # No Ctrl: allow height drag in SETTING_HEIGHT (left press starts drag)
             if self.state == DrawState.SETTING_HEIGHT and event.button() == Qt.MouseButton.LeftButton:
@@ -157,7 +217,7 @@ class CustomGLWidget(gl.GLViewWidget):
             origin, direction = self._screen_to_ray_qt(event.pos().x(), event.pos().y())
             hit = GeometryUtils.intersect_ray_plane(origin, direction, plane_z)
             if hit is not None:
-                self.draw_end_pt = hit
+                self.current_mouse_pt = hit
                 self._update_ghost_box()
                 
         elif self.state == DrawState.SETTING_HEIGHT:
@@ -170,20 +230,9 @@ class CustomGLWidget(gl.GLViewWidget):
         super().mouseMoveEvent(event)
     
     def mouseReleaseEvent(self, event):
-        if self.state == DrawState.DRAGGING_BASE:
-            # transition into height mode
-            self.state = DrawState.SETTING_HEIGHT
-            
-            # setting a default height so that the box pops up immmediately
-            self.draw_height = 1.6
+        if self.state == DrawState.SETTING_HEIGHT:
             self._height_drag_start_y = None
-            self._update_ghost_box()
-            event.accept()
-        elif self.state == DrawState.SETTING_HEIGHT:
-            self._height_drag_start_y = None
-            super().mouseReleaseEvent(event)
-        else:
-            super().mouseReleaseEvent(event)
+        super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event):
         if self.state == DrawState.SETTING_HEIGHT:
@@ -210,47 +259,57 @@ class CustomGLWidget(gl.GLViewWidget):
         self.draw_start_pt = None
         self.draw_end_pt = None
         self.draw_ground_z = None
-        self.draw_height = 1.5
+        self.draw_height = None
         self._height_drag_start_y = None
+        
+        # Force the bounding box to disappear and collapse to zero
+        self.ghost_box.setVisible(False)
+        # self.ghost_box.setSize(0.001, 0.001, 0.001) 
+        
+        # Force the yellow scatter points to clear by passing an empty array
+        self.ghost_pts.setVisible(False)
+        # self.ghost_pts.setData(pos=np.empty((0, 3)))
+        
+        # Trigger a full widget repaint to flush the OpenGL buffer
+        self.update()
 
     def _update_ghost_box(self):
-        """Updates the GLBoxItem to match current drawing state. GLBoxItem is center-based."""
-        if self.draw_start_pt is None or self.draw_end_pt is None:
+        if not self.base_points:
             return
-        ground_z = self.draw_ground_z if self.draw_ground_z is not None else self.ground_z
-        p1 = self.draw_start_pt
-        p2 = self.draw_end_pt
+            
+        # Draw the points
+        pts_to_draw = list(self.base_points)
+        if self.current_mouse_pt is not None and len(self.base_points) < 4:
+            pts_to_draw.append(self.current_mouse_pt)
+        self.ghost_pts.setData(pos=np.array(pts_to_draw))
+        self.ghost_pts.setVisible(True)
+
+        # Draw the OBB Wireframe
+        obb = self._calculate_obb()
+        if not obb: 
+            return
+        cx, cy, cz, dx, dy, heading = obb
         
-        # calculate dimensions
-        dx = abs(p2[0] - p1[0])
-        dy = abs(p2[1] - p1[1])
         dz = max(0.01, self.draw_height)
-        min_x = min(p1[0], p2[0])
-        min_y = min(p1[1], p2[1])
-        # Box center in XY is base center; in Z we want bottom at ground_z so center at ground_z + dz/2
-        center_x = min_x + dx / 2.0
-        center_y = min_y + dy / 2.0
-        center_z = ground_z + dz / 2.0
+        cz_center = cz + (dz / 2.0)
+        
         self.ghost_box.setSize(dx, dy, dz)
         self.ghost_box.resetTransform()
-        self.ghost_box.translate(center_x, center_y, center_z)
+        self.ghost_box.translate(-dx/2.0, -dy/2.0, -dz/2.0) # Local Center
+        self.ghost_box.rotate(np.degrees(heading), 0, 0, 1) # Apply Heading
+        self.ghost_box.translate(cx, cy, cz_center)         # Move to World Pos
         self.ghost_box.setVisible(True)
         self.update()
     
     def _finalize_drawing(self):
-        if self.draw_start_pt is None or self.draw_end_pt is None:
+        obb = self._calculate_obb()
+        if not obb: 
             return
-        p1 = self.draw_start_pt
-        p2 = self.draw_end_pt
-        ground_z = self.draw_ground_z if self.draw_ground_z is not None else self.ground_z
-        dx = abs(p2[0] - p1[0])
-        dy = abs(p2[1] - p1[1])
+        cx, cy, cz, dx, dy, heading = obb
         dz = max(0.01, self.draw_height)
-        cx = (p1[0] + p2[0]) / 2.0
-        cy = (p1[1] + p2[1]) / 2.0
-        cz = ground_z + (dz / 2.0)
-        if dx > 0.1 and dy > 0.1:
-            self.box_created.emit(cx, cy, cz, dx, dy, dz, 0.0)
+        cz_center = cz + (dz / 2.0)
+        
+        self.box_created.emit(cx, cy, cz_center, dx, dy, dz, heading)
                 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -263,9 +322,15 @@ class CustomGLWidget(gl.GLViewWidget):
 
         # Draw status hint when manually drawing a box
         if self.state == DrawState.DRAGGING_BASE:
-            painter.drawText(10, 24, "Draw base: Ctrl+Click release to set height | Esc: cancel")
+            pts = len(self.base_points)
+            if pts == 1: 
+                painter.drawText(10, 24, "Click 2: Set Length & Heading")
+            elif pts == 2: 
+                painter.drawText(10, 24, "Click 3: Set Width")
+            elif pts == 3: 
+                painter.drawText(10, 24, "Click 4: Confirm Base")
         elif self.state == DrawState.SETTING_HEIGHT:
-            painter.drawText(10, 24, "Ctrl+Click: confirm | Scroll/drag: height | Esc: cancel")
+            painter.drawText(10, 24, "Ctrl+Click: Confirm Box | Scroll/Drag: Adjust Height")
         
         # Get Matrices for Projection
         view_matrix = self.viewMatrix()
@@ -300,7 +365,8 @@ class CustomGLWidget(gl.GLViewWidget):
                 label_text = f"{box.track_id}: {box.label}"
                 painter.drawText(int(screen_x), int(screen_y) - 10, label_text)
                 
-        painter.end()      
+        painter.setPen(QColor(255, 0, 255)) 
+        painter.end()          
         
 class LidarVisualizer(BasePluginWidget):
     box_selected_3d = pyqtSignal(int)
