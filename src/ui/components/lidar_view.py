@@ -114,7 +114,8 @@ class CustomGLWidget(gl.GLViewWidget):
         
         p1 = self.base_points[0]
         p2 = self.current_mouse_pt if len(self.base_points) == 1 else self.base_points[1]
-        if p2 is None: p2 = p1
+        if p2 is None: 
+            p2 = p1
             
         dx = max(0.01, np.linalg.norm(p2[:2] - p1[:2]))
         heading = np.arctan2(p2[1] - p1[1], p2[0] - p1[0])
@@ -139,10 +140,12 @@ class CustomGLWidget(gl.GLViewWidget):
             v_perp = np.array([-np.sin(heading), np.cos(heading)])
             dy_vector = p3[:2] - p1[:2]
             dy = abs(np.dot(dy_vector, v_perp))
-            if dy < 0.01: dy = 0.01
+            if dy < 0.01: 
+                dy = 0.01
             
             sign = np.sign(np.dot(dy_vector, v_perp))
-            if sign == 0: sign = 1
+            if sign == 0: 
+                sign = 1
             
             midpoint = (p1 + p2) / 2.0
             center_xy = midpoint[:2] + v_perp * sign * (dy / 2.0)
@@ -283,7 +286,8 @@ class CustomGLWidget(gl.GLViewWidget):
 
         # Draw the OBB Wireframe
         obb = self._calculate_obb()
-        if not obb: return
+        if not obb: 
+            return
         cx, cy, cz, dx, dy, heading = obb
         
         dz = max(0.01, self.draw_height)
@@ -319,9 +323,12 @@ class CustomGLWidget(gl.GLViewWidget):
         # Draw status hint when manually drawing a box
         if self.state == DrawState.DRAGGING_BASE:
             pts = len(self.base_points)
-            if pts == 1: painter.drawText(10, 24, "Click 2: Set Length & Heading")
-            elif pts == 2: painter.drawText(10, 24, "Click 3: Set Width")
-            elif pts == 3: painter.drawText(10, 24, "Click 4: Confirm Base")
+            if pts == 1: 
+                painter.drawText(10, 24, "Click 2: Set Length & Heading")
+            elif pts == 2: 
+                painter.drawText(10, 24, "Click 3: Set Width")
+            elif pts == 3: 
+                painter.drawText(10, 24, "Click 4: Confirm Base")
         elif self.state == DrawState.SETTING_HEIGHT:
             painter.drawText(10, 24, "Ctrl+Click: Confirm Box | Scroll/Drag: Adjust Height")
         
