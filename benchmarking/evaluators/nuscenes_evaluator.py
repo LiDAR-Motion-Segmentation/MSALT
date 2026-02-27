@@ -16,10 +16,13 @@ from src.data.loaders.nuscenes_loader import NuScenesLoader
 class NuScenesEvaluator(BaseEvaluator):
     def __init__(self, cfg: DictConfig):
         super().__init__(cfg)
-        self.metrics = defaultdict(ClassMetrics)
+        self.metrics: dict = defaultdict(ClassMetrics)
         
         # Track point-wise metrics alongside standard metrics
-        self.point_metrics = defaultdict(lambda: {'gt_pts': 0, 'pred_pts': 0, 'abs_error': 0, 'objs': 0})
+        self.point_metrics: dict = defaultdict(lambda: {'gt_pts': 0, 'pred_pts': 0, 'abs_error': 0, 'objs': 0})
+        
+        # safely fetch max_radius from the Hydra config
+        self.max_radius = self.cfg.get('max_radius', None)
 
         try:
             self.loader_cls = NuScenesLoader
@@ -90,6 +93,19 @@ class NuScenesEvaluator(BaseEvaluator):
             })
         return standardized
     
+    def _filter_by_radius(self, boxes: List[dict]) -> List[dict]:
+        """Filters out boxes that are further than max_radius from the ego vehicle (0,0)."""
+        if self.max_radius is None:
+            return boxes
+        
+        filtered_boxes = []
+        for b in boxes:
+            # Calculate 2D Euclidean distance from the origin (ego vehicle)
+            dist = np.hypot(b['x'], b['y'])
+            if dist <= self.max_radius:
+                filtered_boxes.append(b)
+        return filtered_boxes
+    
     def _get_points_in_box(self, points: np.ndarray, box: dict) -> int:
         """Fast 3D point counting using AABB."""
         if points is None or len(points) == 0:
@@ -124,14 +140,21 @@ class NuScenesEvaluator(BaseEvaluator):
         limit = min(len(self.loader), self.cfg.num_frames)
         user_dir = Path(self.cfg.output_dir) / "3d"
         
-        print(f"\nEvaluating {limit} frames for Scene {self.cfg.scene_id}...")
+        radius_text = f" (Radius: <= {self.max_radius}m)" if self.max_radius else " (All Distances)"
+        print(f"\nEvaluating {limit} frames for Scene {self.cfg.scene_id}{radius_text}...")
         print(f"{'Frame':<6} | {'Class':<10} | {'GT':<3} | {'Pred':<4} | {'Best IoU':<8} | {'Status'}")
         print("-" * 65)
         
         for i in range(limit):
             frame = self.loader.get(i)
+            
+            # parsing boxes
             gt_std = self._parse_gt_box(frame.metadata.get('gt_boxes', []))
             pred_std = self._parse_user_json(user_dir / f"{i:06d}.json")
+            
+            # applied distance filter
+            gt_std = self._filter_by_radius(gt_std)
+            pred_std = self._filter_by_radius(pred_std)
             
             points = getattr(frame, 'point_cloud', np.array([]))
             

@@ -2,11 +2,12 @@ defaults:
   - _self_  
 
 # Benchmark Settings
-output_dir: "/home/soumoroy/SALT/MSALT_outputs_annotations_nuscenes/"                   
+output_dir: "/home/soumoroy/SALT/MSALT_outputs_annotations_nuscenes_v2/"                   
 data_root: "/home/soumoroy/Downloads/v1.0-mini"                                       
-scene_id: 1                                           
-num_frames: 5                                        
+scene_id: 2                                           
+num_frames: 10                                        
 iou_threshold: 0.3   # IoU > 0.3 counts as True Positive
+max_radius: 20       # Distance in meters
 
 # Class Mapping (Grouping diverse labels into Report Categories)
 # Format: "Raw_Dataset_Label": "Report_Class_Name"
@@ -31,6 +32,7 @@ label_mapping:
   moving_bus: "Bus"
   static_bus: "Bus"
   vehicle.truck: "Truck"
+  vehicle.trailer: "Truck"
   bus: "Bus"
   vehicle.bus.rigid: "Bus"
   vehicle.bus.bendy: "Bus"
