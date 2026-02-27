@@ -142,15 +142,36 @@ class CameraStripWidget(BasePluginWidget):
             box_rect = modal.get_bounding_box()
             
             if box_rect:
-                x = box_rect.x()
-                y = box_rect.y()
-                w = box_rect.width()
-                h = box_rect.height()
-                logger.info(f"User drew a 2D box on {cam_name}: X:{x}, Y:{y}, W:{w}, H:{h}")
+                # Fetch the true physical resolution of the raw NumPy array
+                orig_w = self.image_labels[cam_name].orig_width
+                orig_h = self.image_labels[cam_name].orig_height
                 
-                # Check for Shift modifier for override behavior
+                # Calculate the ratio between the raw array and Qt's logical Pixmap
+                scale_x = orig_w / pixmap.width()
+                scale_y = orig_h / pixmap.height()
+                
+                # Apply scaling and safely clamp to the image boundaries
+                # (This completely prevents SAM2/OpenCV array slicing crashes)
+                x1 = max(0, int(box_rect.left() * scale_x))
+                y1 = max(0, int(box_rect.top() * scale_y))
+                x2 = min(orig_w, int(box_rect.right() * scale_x))
+                y2 = min(orig_h, int(box_rect.bottom() * scale_y))
+                
+                x = x1
+                y = y1
+                w = x2 - x1
+                h = y2 - y1
+                
+                # Prevent sending 0-pixel microscopic boxes to the AI
+                if w < 5 or h < 5:
+                    logger.warning(f"Box drawn on {cam_name} is too small to process.")
+                    return
+
+                logger.info(f"Modal 2D Box -> Numpy Scaled [{cam_name}]: X:{x}, Y:{y}, W:{w}, H:{h}")
+                
+                # Check for Shift modifier in case the backend relies on it
                 modifiers = QApplication.keyboardModifiers()
                 is_override = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
                 
-                # Emit the signal so the main app processes it exactly like a normal drag!
+                # Fire the exact same signal the main window relies on!
                 self.box_drawn.emit(cam_name, x, y, w, h, is_override)
