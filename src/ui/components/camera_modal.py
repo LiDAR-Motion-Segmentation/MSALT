@@ -94,10 +94,6 @@ class CameraPopOutModal(QDialog):
         # Remove fitInView so the image defaults to a massive 1:1 pixel scale.
         self.view.resetTransform()
         
-        # # Fit the image to the window on startup
-        # self.view.fitInView(self.scene.sceneRect(), 
-        #                     Qt.AspectRatioMode.KeepAspectRatio)
-        
         # Setup UI Layout
         layout = QVBoxLayout(self)
         layout.addWidget(self.view)
