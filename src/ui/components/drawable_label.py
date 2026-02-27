@@ -64,13 +64,6 @@ class DrawableLabel(QLabel):
         self.static_rects = rects_data
         self.update()
 
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.is_drawing = True
-            self.start_point = event.position().toPoint()
-            self.current_rect = QRect(self.start_point, self.start_point)
-            self.update()
-
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         if self.is_drawing and self.start_point:
             current_pos = event.position().toPoint()
