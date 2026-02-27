@@ -67,7 +67,7 @@ class CameraStripWidget(BasePluginWidget):
                 lambda x, y, w, h, cid=cam_id: self._on_box_drawn(cid, x, y, w, h)
             )
             
-            lbl_img.double_clicked.connect(self._on_label_double_clicked)
+            lbl_img.right_clicked.connect(self._on_label_right_clicked)
 
             v_layout.addWidget(lbl_title)
             v_layout.addWidget(lbl_img)
@@ -86,7 +86,7 @@ class CameraStripWidget(BasePluginWidget):
         # emit with the override flag
         self.box_drawn.emit(cam_id, x, y, w, h, is_override)
         
-    def _on_label_double_clicked(self, cam_id: str):
+    def _on_label_right_clicked(self, cam_id: str):
         """Handler for when a specific camera label is double-clicked."""
         pixmap = self.image_labels[cam_id].pixmap()
         # Grab the projected boxes!

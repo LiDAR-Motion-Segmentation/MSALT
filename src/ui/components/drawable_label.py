@@ -17,7 +17,7 @@ class DrawableLabel(QLabel):
     selection_finished = pyqtSignal(int, int, int, int)
     
     # Emit the camera_id when double-clicked
-    double_clicked = pyqtSignal(str)
+    right_clicked = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -226,6 +226,19 @@ class DrawableLabel(QLabel):
             if self.camera_id:
                 self.double_clicked.emit(self.camera_id)
         super().mouseDoubleClickEvent(event)
+        
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        # Left Click: Start Drawing
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.is_drawing = True
+            self.start_point = event.position().toPoint()
+            self.current_rect = QRect(self.start_point, self.start_point)
+            self.update()
+            
+        # Right Click: Open Modal
+        elif event.button() == Qt.MouseButton.RightButton:
+            if self.camera_id:
+                self.right_clicked.emit(self.camera_id)
         
     def get_2d_projections(self):
         """Returns the currently projected 2D boxes in raw image coordinates."""
