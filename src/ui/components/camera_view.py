@@ -1,13 +1,17 @@
 from typing import List, Dict
 import numpy as np
-from PyQt6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QVBoxLayout, QScrollArea
+from PyQt6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QVBoxLayout, QScrollArea, QDialog
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap
 
 from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
 from src.ui.components.drawable_label import DrawableLabel
+from src.ui.components.camera_modal import CameraPopOutModal
 from src.core.objects import BoundingBox3D
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CameraStripWidget(BasePluginWidget):
     """
@@ -62,6 +66,8 @@ class CameraStripWidget(BasePluginWidget):
             lbl_img.selection_finished.connect(
                 lambda x, y, w, h, cid=cam_id: self._on_box_drawn(cid, x, y, w, h)
             )
+            
+            lbl_img.double_clicked.connect(self._on_label_double_clicked)
 
             v_layout.addWidget(lbl_title)
             v_layout.addWidget(lbl_img)
@@ -79,6 +85,15 @@ class CameraStripWidget(BasePluginWidget):
         
         # emit with the override flag
         self.box_drawn.emit(cam_id, x, y, w, h, is_override)
+        
+    def _on_label_double_clicked(self, cam_id: str):
+        """Handler for when a specific camera label is double-clicked."""
+        pixmap = self.image_labels[cam_id].pixmap()
+        # Grab the projected boxes!
+        projections = self.image_labels[cam_id].get_2d_projections()
+        
+        if pixmap:
+            self.open_camera_modal(pixmap, cam_id, projections)
 
     def on_frame_update(self, data: FrameData) -> None:
         for cam_id, img_array in data.images.items():
@@ -114,3 +129,28 @@ class CameraStripWidget(BasePluginWidget):
                     calib.get('intrinsic'),
                     calib.get('extrinsic')
                 )         
+
+    def open_camera_modal(self, pixmap, cam_name, projections):
+        """Triggered by double-clicking a camera image."""
+        
+        # Pass the projections into the modal
+        modal = CameraPopOutModal(pixmap, cam_name, projections, parent=self)
+        
+        # Execute it (this blocks the main window until they hit Save or Cancel)
+        if modal.exec() == QDialog.DialogCode.Accepted:
+            # Retrieve the box they drew
+            box_rect = modal.get_bounding_box()
+            
+            if box_rect:
+                x = box_rect.x()
+                y = box_rect.y()
+                w = box_rect.width()
+                h = box_rect.height()
+                logger.info(f"User drew a 2D box on {cam_name}: X:{x}, Y:{y}, W:{w}, H:{h}")
+                
+                # Check for Shift modifier for override behavior
+                modifiers = QApplication.keyboardModifiers()
+                is_override = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+                
+                # Emit the signal so the main app processes it exactly like a normal drag!
+                self.box_drawn.emit(cam_name, x, y, w, h, is_override)
