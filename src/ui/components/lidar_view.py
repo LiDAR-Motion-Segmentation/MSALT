@@ -179,18 +179,12 @@ class CustomGLWidget(gl.GLViewWidget):
                 elif self.state == DrawState.DRAGGING_BASE:
                     hit = GeometryUtils.intersect_ray_plane(origin, direction, self.draw_ground_z)
                     if hit is not None:
-                        # Append the magnetically snapped point if it's point 2
-                        if len(self.base_points) == 1:
-                            obb = self._calculate_obb()
-                            if obb:
-                                heading = obb[5]
-                                dx = obb[3]
-                                hit = self.base_points[0].copy()
-                                hit[0] += dx * np.cos(heading)
-                                hit[1] += dx * np.sin(heading)
-                        
+                        # Directly append the EXACT physical click location. 
+                        # We removed the buggy override block that flattened the box
                         self.base_points.append(hit.copy())
-                        if len(self.base_points) == 4:
+                        
+                        # Transition to Height on the 3rd click, not the 4th!
+                        if len(self.base_points) == 3:
                             self.state = DrawState.SETTING_HEIGHT
                             self.draw_height = 1.6  # Extrude visually
                         self._update_ghost_box()
@@ -324,7 +318,7 @@ class CustomGLWidget(gl.GLViewWidget):
             pts = len(self.base_points)
             if pts == 1: painter.drawText(10, 24, "Click 2: Set Length & Heading")
             elif pts == 2: painter.drawText(10, 24, "Click 3: Set Width")
-            elif pts == 3: painter.drawText(10, 24, "Click 4: Confirm Base")
+            # elif pts == 3: painter.drawText(10, 24, "Click 4: Confirm Base")
         elif self.state == DrawState.SETTING_HEIGHT:
             painter.drawText(10, 24, "Ctrl+Click: Confirm Box | Scroll/Drag: Adjust Height")
         
