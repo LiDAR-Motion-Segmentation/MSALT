@@ -389,8 +389,10 @@ class MainWindow(QMainWindow):
         
         fallback_center = None
         
+        ground_z = getattr(self.lidar_view_cfg, "default_ground_z", -1.5) if self.lidar_view_cfg else -1.5
+        
         if abs(ray_lidar[2]) > 0.05: # Avoid divide by zero (horizon)
-            t = (-1.0 - cam_origin[2]) / ray_lidar[2]
+            t = (ground_z - cam_origin[2]) / ray_lidar[2]
             if t > 0:
                 fallback_center = cam_origin + t * ray_lidar
 
@@ -418,6 +420,11 @@ class MainWindow(QMainWindow):
         mask_3d = GeometryUtils.get_points_in_mask(points, mask, K, camera_pos)
 
         selected_points = points[mask_3d]
+        
+        if len(selected_points) > 0:
+            distances = np.linalg.norm(selected_points[:, :2], axis=1) # 2D distance from origin
+            selected_points = selected_points[distances > 2.0]         # Keep only points beyond 2m
+            
         logger.info(
             f"Annotation: Selected {len(selected_points)} points inside 2D box."
         )
@@ -441,16 +448,20 @@ class MainWindow(QMainWindow):
             new_box.label = self.list_panel.get_current_label()
             
             if is_auto:
+                # 1. Reject Ego-Vehicle (NuScenes car is ~4m long, 3.0m radius clears it entirely)
+                dist_to_ego = np.hypot(new_box.x, new_box.y)
+                if dist_to_ego < 3.0: 
+                    logger.info(f"Auto-box rejected: On ego-vehicle ({dist_to_ego:.2f}m)")
+                    return
+
+                # 2. 3D Spatial Deduplication (Bird's-Eye NMS)
                 existing_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
                 for e_box in existing_boxes:
-                    # Calculate Bird's-Eye-View (X, Y) Euclidean Distance
                     dist = np.hypot(new_box.x - e_box.x, new_box.y - e_box.y)
-                    
-                    # Threshold: 0.8 meters. If centers are this close, it's the same object!
                     if dist < 0.8: 
                         logger.info(f"Duplicate 3D box suppressed (Distance: {dist:.2f}m)")
-                        return  # Throw away this duplicates
-
+                        return
+                    
             # Save indices for Red Coloring
             new_box.point_indices = np.where(mask_3d)[0]
 
