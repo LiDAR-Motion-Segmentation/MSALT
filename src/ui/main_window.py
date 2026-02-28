@@ -1,5 +1,5 @@
 from typing import List
-from PyQt6.QtWidgets import QMainWindow, QDockWidget
+from PyQt6.QtWidgets import QMainWindow, QDockWidget, QApplication
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence, QShortcut
 from pathlib import Path
@@ -827,7 +827,6 @@ class MainWindow(QMainWindow):
             return
 
         self.statusBar().showMessage("Running YOLO Auto-Annotation...", 5000)
-        from PyQt6.QtWidgets import QApplication
         QApplication.processEvents() # Force UI update before heavy inference
 
         # Map COCO indices to your config labels
