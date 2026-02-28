@@ -1,6 +1,6 @@
 from typing import List
-from PyQt6.QtWidgets import QMainWindow, QDockWidget
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QMainWindow, QDockWidget, QApplication
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence, QShortcut
 from pathlib import Path
 
@@ -127,6 +127,7 @@ class MainWindow(QMainWindow):
         self.batch_grid_window.request_jump.connect(self.load_frame)
         self.batch_grid_window.data_modified.connect(self.save_specific_frame)
         self.automation_panel.grid_view_requested.connect(self.open_grid_view)
+        self.automation_panel.tracking_requested.connect(self.predict_deep_selection)
         
         # Save (Ctrl+S)
         save_action = QAction("Save Annotations", self)
@@ -179,6 +180,17 @@ class MainWindow(QMainWindow):
         # Forward Prediction (K)
         self.shortcut_predict = QShortcut(QKeySequence("K"), self)
         self.shortcut_predict.activated.connect(self.predict_forward_selection)
+        
+        # Model Tracking (M)
+        self.shortcut_deep = QShortcut(QKeySequence("M"), self)
+        self.shortcut_deep.activated.connect(self.predict_deep_selection)
+        
+        # Connect the 3D click signal to your selection handler
+        self.lidar_widget.box_selected_3d.connect(self.select_box_from_3d)
+        
+        # YOLO+SAM2 button
+        self.automation_panel.tracking_requested.connect(self.predict_forward_selection)
+        self.automation_panel.yolo_requested.connect(self.run_yolo_pipeline)
         
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
@@ -313,7 +325,7 @@ class MainWindow(QMainWindow):
         """ Update the slot definition to accept the bool"""
         self.handle_annotation(cam_id, x, y, w, h, is_override)
 
-    def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int, is_override: bool):
+    def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int, is_override: bool, is_auto = False):
         current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
         selected_box = next((b for b in current_boxes if b.selected), None)
         
@@ -427,6 +439,17 @@ class MainWindow(QMainWindow):
             # Create the Box Object
             new_box = BoundingBox3D(**box_params)
             new_box.label = self.list_panel.get_current_label()
+            
+            if is_auto:
+                existing_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+                for e_box in existing_boxes:
+                    # Calculate Bird's-Eye-View (X, Y) Euclidean Distance
+                    dist = np.hypot(new_box.x - e_box.x, new_box.y - e_box.y)
+                    
+                    # Threshold: 0.8 meters. If centers are this close, it's the same object!
+                    if dist < 0.8: 
+                        logger.info(f"Duplicate 3D box suppressed (Distance: {dist:.2f}m)")
+                        return  # Throw away this duplicates
 
             # Save indices for Red Coloring
             new_box.point_indices = np.where(mask_3d)[0]
@@ -778,3 +801,176 @@ class MainWindow(QMainWindow):
         if total_filled > 0:
             self.save_current_work()
             self.statusBar().showMessage(f"Kalman predicted {total_filled} frames.", 3000)
+            
+    def select_box_from_3d(self, track_id: int):
+        """Handler for when a box is clicked directly in the 3D view."""
+        # Tell the manager to exclusively select this ID
+        self.annotation_manager.select_box(self.current_frame_idx, track_id, exclusive=True)
+        
+        # Find the actual BoundingBox3D object for this track_id
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        selected_box = next((b for b in current_boxes if b.track_id == track_id), None)
+        
+        if selected_box:
+            # Trigger your existing handler to update the Inspector panel
+            # (Passing the OBJECT now, not the integer)
+            self.on_box_selected(selected_box) 
+            
+            # Visually update the UI list
+            self.refresh_views_only()
+            self.statusBar().showMessage(f"Selected Box ID: {track_id}", 2000)
+            
+    def predict_deep_selection(self):
+        """
+        Handler for Deep Model Tracking (M).
+        """
+        current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        selected_boxes = next((b for b in current_boxes if getattr(b, 'selected', False)), None)
+        
+        if not selected_boxes:
+            self.statusBar().showMessage("Select a box to Model Track (M).", 3000)
+            return
+        
+        # model_cfg = getattr(self.cfg, "annotation", None)
+        # model_path = getattr(model_cfg, "weights", "deep_annotation_inference.h5")
+        
+        # Let the user know it's working
+        self.statusBar().showMessage(f"Loading Model & Tracking ID {selected_boxes.track_id} in background...", 5000)
+        
+        next_frame_idx = self.current_frame_idx + 1
+        if next_frame_idx >= self.data_controller.get_total_frames():
+            self.statusBar().showMessage("Already at the last frame!", 2000)
+            return
+        
+        # # Update UI to show processing (Crucial before TF hogs the thread)
+        # self.statusBar().showMessage(f"Deep Tracking ID {selected_boxes.track_id}...", 5000)
+        # QApplication.processEvents() # Forces the status bar to render immediately
+        
+        # Fetch the point cloud for the next frame
+        next_frame_data = self.data_controller.get(next_frame_idx)
+        next_points = next_frame_data.point_cloud
+        
+        # CREATE AND START THE THREAD
+        self.tracking_thread = TrackerWorker(
+            self.annotation_manager,
+            self.current_frame_idx,
+            selected_boxes.track_id,
+            next_points
+        )
+        
+        # Connect the signals to our callbacks
+        self.tracking_thread.finished.connect(self._on_tracking_finished)
+        self.tracking_thread.error.connect(self._on_tracking_error)
+        
+        self.tracking_thread.start()
+        
+        # # Run the Deep Prediction
+        # try:
+        #     new_box = self.annotation_manager.run_deep_prediction(
+        #         self.current_frame_idx, 
+        #         selected_boxes.track_id, 
+        #         next_points
+        #     )
+            
+        #     if new_box:
+        #         # Success! Jump to the next frame and select the new box
+        #         self.load_frame(next_frame_idx)
+        #         # Reuse the method we wrote earlier to highlight it in 3D and UI!
+        #         self.select_box_from_3d(new_box.track_id) 
+                
+        #         self.statusBar().showMessage(f"Successfully tracked ID {new_box.track_id} to frame {next_frame_idx}", 3000)
+        #     else:
+        #         self.statusBar().showMessage("Tracking failed. Object may be occluded.", 3000)
+                
+        # except Exception as e:
+        #     self.statusBar().showMessage(f"Tracker Error: {str(e)}", 5000)
+        #     traceback.print_exc()
+        
+    def _on_tracking_finished(self, new_box):
+        """Callback when the background thread finishes successfully."""
+        if new_box:
+            next_frame_idx = self.current_frame_idx + 1
+            self.load_frame(next_frame_idx)
+            self.select_box_from_3d(new_box.track_id)
+            self.statusBar().showMessage(f"Successfully tracked ID {new_box.track_id}!", 3000)
+        else:
+            self.statusBar().showMessage("Tracking failed. Object may be occluded.", 3000)
+
+    def _on_tracking_error(self, err_msg):
+        """Callback when the background thread crashes."""
+        self.statusBar().showMessage(f"Tracker Error: {err_msg}", 5000)
+        
+    def run_yolo_pipeline(self):
+        """Runs YOLO on all cameras and feeds the boxes into the SAM2->LiDAR pipeline."""
+        if self.current_frame_data is None or not self.current_frame_data.images:
+            self.statusBar().showMessage("No images available for YOLO.", 2000)
+            return
+
+        self.statusBar().showMessage("Running YOLO Auto-Annotation...", 5000)
+        QApplication.processEvents() # Force UI update before heavy inference
+
+        # Map COCO indices to your config labels
+        coco_to_msalt = {
+            0: "moving_people", 
+            2: "moving_car",
+            3: "moving_cyclist", # Motorcycle -> Car for now based on your config
+            5: "moving_bus",     # Bus -> Car
+            7: "moving_truck"    # Truck -> Car
+        }
+
+        total_boxes_created = 0
+
+        # Iterate over every camera view available in the current frame
+        for cam_id, image in self.current_frame_data.images.items():
+            logger.info(f"Running YOLO on {cam_id}...")
+            detections = self.seg_engine.get_yolo_detection(image)
+
+            for det in detections:
+                x, y, w, h = det['box']
+                cls_id = det['class_id']
+
+                # Get the string label
+                msalt_label = coco_to_msalt.get(cls_id, "unknown")
+
+                # Temporarily spoof the UI list panel so `handle_annotation` uses the YOLO label
+                original_label = self.list_panel.get_current_label()
+                self.list_panel.combo_label.setCurrentText(msalt_label)
+
+                # Deselect everything so it creates a NEW box instead of overriding
+                self.annotation_manager.deselect_all()
+
+                # Feed the YOLO box directly into your existing SAM2->LiDAR pipeline!
+                self.handle_annotation(cam_id, x, y, w, h, is_override=False, is_auto=True)
+
+                # Restore the UI dropdown
+                self.list_panel.combo_label.setCurrentText(original_label)
+                total_boxes_created += 1
+
+        self.refresh_views_only()
+        self.statusBar().showMessage(f"YOLO generated {total_boxes_created} new 3D boxes!", 4000)
+
+class TrackerWorker(QThread):
+    """Runs TensorFlow tracking in the background so the UI never freezes."""
+    finished = pyqtSignal(object)  # Emits the new box or None
+    error = pyqtSignal(str)        # Emits error messages
+
+    def __init__(self, annotation_manager, current_frame_idx, track_id, next_points):
+        super().__init__()
+        self.annotation_manager = annotation_manager
+        self.current_frame_idx = current_frame_idx
+        self.track_id = track_id
+        self.next_points = next_points
+
+    def run(self):
+        try:
+            # This entirely blocks the BACKGROUND thread, leaving the UI completely safe!
+            new_box = self.annotation_manager.run_deep_prediction(
+                self.current_frame_idx, 
+                self.track_id, 
+                self.next_points
+            )
+            self.finished.emit(new_box)
+            
+        except Exception as e:
+            traceback.print_exc()
+            self.error.emit(str(e))

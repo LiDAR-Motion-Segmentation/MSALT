@@ -7,6 +7,7 @@ class AutomationPanel(QWidget):
     interpolate_requested = pyqtSignal()
     grid_view_requested = pyqtSignal()
     tracking_requested = pyqtSignal()
+    yolo_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -79,6 +80,35 @@ class AutomationPanel(QWidget):
         """)
         self.btn_linear.clicked.connect(self.tracking_requested.emit)
         layout.addWidget(self.btn_linear)
+        
+        self.btn_deep = QPushButton("Model Tracking (M)")
+        self.btn_deep.setStyleSheet("""
+            QPushButton {
+                background-color: #8A2BE2;  /* BlueViolet */
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #9370DB; }
+        """)
+        self.btn_deep.clicked.connect(self.tracking_requested.emit)
+        layout.addWidget(self.btn_deep)
+        
+        self.btn_yolo = QPushButton("Auto-Annotate (YOLO+SAM2)")
+        self.btn_yolo.setToolTip("Run YOLO detection and project 3D boxes")
+        self.btn_yolo.clicked.connect(self.yolo_requested.emit)
+        self.btn_yolo.setStyleSheet("""
+            QPushButton {
+                background-color: #e67e22; /* Orange */
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #d35400; }
+        """)
+        layout.addWidget(self.btn_yolo)
 
         layout.addStretch()
         self.setLayout(layout)

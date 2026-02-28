@@ -4,9 +4,11 @@ import json
 import logging
 from pathlib import Path
 import numpy as np
+import math
 from copy import deepcopy
 from src.core.geometry import GeometryUtils
 from src.core.tracker import KalmanBoxTracker
+# from src.core.model_tracker import DeepBoxTracker
 
 logger = logging.getLogger(__name__)
 
@@ -420,3 +422,45 @@ class AnnotationManager:
             count += 1
             
         return count
+    
+    def run_deep_prediction(self, current_frame_idx: int, track_id: int, next_points: np.ndarray) -> int:
+        """
+        Predicts future frames using the Deep Learning Model (LSTM).
+        """
+        
+        if not hasattr(self, 'tracker') or self.tracker is None:
+            logger.info("Initializing PointCloud Tracker for the first time...")
+            
+            from src.core.model_tracker import DeepBoxTracker 
+            
+            self.tracker = DeepBoxTracker()
+            
+        # get the target box from the current frame
+        current_boxes = self.get_boxes(current_frame_idx)
+        target_box = next((b for b in current_boxes if b.track_id == track_id), None)
+        
+        if not target_box:
+            logger.warning(f"Could not find box with ID {track_id} to track.")
+            return None
+        
+        # run the tracking inference
+        new_box = self.tracker.track(target_box, next_points)
+        
+        # save the new box to the next frame
+        next_frame_idx = current_frame_idx + 1
+        self.add_box(next_frame_idx, new_box)
+        
+        return new_box
+    
+    def select_box(self, frame_idx: int, track_id: int, exclusive: bool = True):
+        """
+        Marks a specific bounding box as selected.
+        If exclusive is True, deselects all other boxes in the frame.
+        """
+        boxes = self.get_boxes(frame_idx)
+        
+        for box in boxes:
+            if box.track_id == track_id:
+                box.selected = True
+            elif exclusive:
+                box.selected = False

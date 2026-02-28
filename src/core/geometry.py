@@ -632,3 +632,59 @@ class GeometryUtils:
             dz=box.dz,
             heading=new_heading
         )
+        
+    @staticmethod
+    def ray_intersects_obb(ray_origin: np.ndarray, ray_dir: np.ndarray, box: 'BoundingBox3D') -> tuple[bool, float]:
+        """
+        Checks if a 3D ray intersects an Oriented Bounding Box (OBB) using the Slab Method.
+        Returns (hit: bool, distance: float).
+        """
+        center = np.array([box.x, box.y, box.z])
+        
+        # Create Rotation Matrix for Z-axis yaw (heading)
+        cos_h = np.cos(box.heading)
+        sin_h = np.sin(box.heading)
+        R = np.array([
+            [cos_h, -sin_h, 0],
+            [sin_h,  cos_h, 0],
+            [0,      0,     1]
+        ])
+        
+        # Transform the ray to the OBB's local coordinate space
+        # (The inverse of a pure rotation matrix is its transpose)
+        local_origin = R.T @ (ray_origin - center)
+        local_dir = R.T @ ray_dir
+        
+        # Half dimensions of the box
+        half_size = np.array([box.dx / 2.0, box.dy / 2.0, box.dz / 2.0])
+        vmin = -half_size
+        vmax = half_size
+        
+        tmin = -np.inf
+        tmax = np.inf
+        
+        # Slab intersection algorithm
+        for i in range(3):
+            if abs(local_dir[i]) < 1e-6:
+                # Ray is parallel to this axis; check if it's inside the slab bounds
+                if local_origin[i] < vmin[i] or local_origin[i] > vmax[i]:
+                    return False, -1.0
+            else:
+                t1 = (vmin[i] - local_origin[i]) / local_dir[i]
+                t2 = (vmax[i] - local_origin[i]) / local_dir[i]
+                
+                if t1 > t2:
+                    t1, t2 = t2, t1
+                    
+                tmin = max(tmin, t1)
+                tmax = min(tmax, t2)
+                
+                if tmin > tmax:
+                    return False, -1.0  # Missed the box entirely
+                    
+        # If tmax < 0, the box is physically behind the camera
+        if tmax < 0:
+            return False, -1.0
+            
+        # Hit! Return True and the distance to the hit point
+        return True, tmin

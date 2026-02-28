@@ -8,3 +8,13 @@ tracking:
   name: "SAM2-tracking"
   weights: "sam2_l.pt"
   conf_threshold: 0.5
+
+annotation:
+  name: "Deep Annotation Inference"
+  weights: "deep_annotation_inference.h5"
+
+detection:
+  name: "YOLO26"
+  weights: "yolo26l.pt"
+  conf_threshold: 0.4
+  classes: [0, 2, 3, 5, 7] # COCO indices: Person, Car, Motorcycle, Bus, Truck

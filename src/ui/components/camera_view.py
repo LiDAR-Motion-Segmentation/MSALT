@@ -1,13 +1,17 @@
 from typing import List, Dict
 import numpy as np
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QVBoxLayout, QScrollArea, QSizePolicy, QApplication
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QVBoxLayout, QScrollArea, QSizePolicy, QApplication , QDialog
 from PyQt6.QtCore import Qt, pyqtSignal, QRect
 from PyQt6.QtGui import QImage, QPixmap, QPainter, QColor, QPen
 
 from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
 from src.ui.components.drawable_label import DrawableLabel
+from src.ui.components.camera_modal import CameraPopOutModal
 from src.core.objects import BoundingBox3D
+import logging
+
+logger = logging.getLogger(__name__)
         
 class CameraStripWidget(BasePluginWidget):
     """
@@ -64,6 +68,8 @@ class CameraStripWidget(BasePluginWidget):
             lbl_img.selection_finished.connect(
                 lambda x, y, w, h, cid=cam_id: self._on_box_drawn(cid, x, y, w, h)
             )
+            
+            lbl_img.right_clicked.connect(self._on_label_right_clicked)
 
             v_layout.addWidget(lbl_title)
             v_layout.addWidget(lbl_img)
@@ -115,4 +121,59 @@ class CameraStripWidget(BasePluginWidget):
                     boxes,
                     calib.get('intrinsic'),
                     calib.get('extrinsic')
-                )         
+                )  
+                
+    def _on_label_right_clicked(self, cam_id: str):
+        """Handler for when a specific camera label is double-clicked."""
+        pixmap = self.image_labels[cam_id].pixmap()
+        # Grab the projected boxes!
+        projections = self.image_labels[cam_id].get_2d_projections()
+        
+        if pixmap:
+            self.open_camera_modal(pixmap, cam_id, projections)   
+            
+    def open_camera_modal(self, pixmap, cam_name, projections):
+        """Triggered by double-clicking a camera image."""
+        
+        # Pass the projections into the modal
+        modal = CameraPopOutModal(pixmap, cam_name, projections, parent=self)
+        
+        # Execute it (this blocks the main window until they hit Save or Cancel)
+        if modal.exec() == QDialog.DialogCode.Accepted:
+            # Retrieve the box they drew
+            box_rect = modal.get_bounding_box()
+            
+            if box_rect:
+                # Fetch the true physical resolution of the raw NumPy array
+                orig_w = self.image_labels[cam_name].orig_width
+                orig_h = self.image_labels[cam_name].orig_height
+                
+                # Calculate the ratio between the raw array and Qt's logical Pixmap
+                scale_x = orig_w / pixmap.width()
+                scale_y = orig_h / pixmap.height()
+                
+                # Apply scaling and safely clamp to the image boundaries
+                # (This completely prevents SAM2/OpenCV array slicing crashes)
+                x1 = max(0, int(box_rect.left() * scale_x))
+                y1 = max(0, int(box_rect.top() * scale_y))
+                x2 = min(orig_w, int(box_rect.right() * scale_x))
+                y2 = min(orig_h, int(box_rect.bottom() * scale_y))
+                
+                x = x1
+                y = y1
+                w = x2 - x1
+                h = y2 - y1
+                
+                # Prevent sending 0-pixel microscopic boxes to the AI
+                if w < 5 or h < 5:
+                    logger.warning(f"Box drawn on {cam_name} is too small to process.")
+                    return
+
+                logger.info(f"Modal 2D Box -> Numpy Scaled [{cam_name}]: X:{x}, Y:{y}, W:{w}, H:{h}")
+                
+                # Check for Shift modifier in case the backend relies on it
+                modifiers = QApplication.keyboardModifiers()
+                is_override = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+                
+                # Fire the exact same signal the main window relies on!
+                self.box_drawn.emit(cam_name, x, y, w, h, is_override)    

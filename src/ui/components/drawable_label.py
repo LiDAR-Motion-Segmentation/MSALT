@@ -15,6 +15,9 @@ class DrawableLabel(QLabel):
 
     # Signal: (x, y, w, h) in original image coordinates
     selection_finished = pyqtSignal(int, int, int, int)
+    
+    # Emit the camera_id when double-clicked
+    right_clicked = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -122,20 +125,6 @@ class DrawableLabel(QLabel):
         
         return QPoint(clamped_x, clamped_y)
 
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            scale, off_x, off_y = self.get_view_params()
-            target_w = int(self.orig_width * scale)
-            target_h = int(self.orig_height * scale)
-            img_rect = QRect(off_x, off_y, target_w, target_h)
-            
-            # Only start drawing if click is within image area
-            if img_rect.contains(event.position().toPoint()):
-                self.is_drawing = True
-                self.start_point = self._clamp_to_image_area(event.position().toPoint())
-                self.current_rect = QRect(self.start_point, self.start_point)
-                self.update()
-
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         if self.is_drawing and self.start_point:
             current_pos = self._clamp_to_image_area(event.position().toPoint())
@@ -150,38 +139,31 @@ class DrawableLabel(QLabel):
             screen_rect = self.current_rect
 
             # Convert to Original Image Coordinates
-            if self.pixmap() and screen_rect is not None and not screen_rect.isEmpty():
-                scale, off_x, off_y = self.get_view_params()
+            if self.pixmap() and screen_rect and not screen_rect.isEmpty():
                 
-                # Convert Widget Coords -> Image Coords
-                # formula: img_x = (screen_x - offset) / scale
-                real_x = (screen_rect.x() - off_x) / scale
-                real_y = (screen_rect.y() - off_y) / scale
-                real_w = screen_rect.width() / scale
-                real_h = screen_rect.height() / scale
-                
-                # Clamp to image bounds and adjust dimensions if needed
-                real_x = max(0, min(real_x, self.orig_width - 1))
-                real_y = max(0, min(real_y, self.orig_height - 1))
-                
-                # Ensure width and height don't extend beyond image bounds
-                if real_x + real_w > self.orig_width:
-                    real_w = self.orig_width - real_x
-                if real_y + real_h > self.orig_height:
-                    real_h = self.orig_height - real_y
-                
-                # Convert to integers
-                real_x = int(real_x)
-                real_y = int(real_y)
-                real_w = max(1, int(real_w))  # Ensure at least 1 pixel
-                real_h = max(1, int(real_h))  # Ensure at least 1 pixel
-                
-                # Emit the signal
-                logger.info(
-                    f"Image Box Drawn: {real_x}, {real_y}, {real_w}x{real_h}"
-                )
-                self.selection_finished.emit(real_x, real_y, real_w, real_h)
+                # Ignore tiny 1-5 pixel boxes caused by hand-shake during double-clicks
+                if screen_rect.width() > 5 and screen_rect.height() > 5:
+                    # Calculate scale to map back to original image resolution
+                    disp_w = self.width()
+                    disp_h = self.height()
 
+                    # For simplicity, we assume the pixmap fills the label (ScaledContents=True)
+                    # or we calculate the offset.
+
+                    scale_x = self.orig_width / disp_w
+                    scale_y = self.orig_height / disp_h
+
+                    real_x = int(screen_rect.x() * scale_x)
+                    real_y = int(screen_rect.y() * scale_y)
+                    real_w = int(screen_rect.width() * scale_x)
+                    real_h = int(screen_rect.height() * scale_y)
+
+                    # Emit the signal
+                    logger.info(
+                        f"Image Box Drawn: {real_x}, {real_y}, {real_w}x{real_h}"
+                    )
+                    self.selection_finished.emit(real_x, real_y, real_w, real_h)
+                
             # Clear visual box after release
             self.current_rect = None
             self.update()
@@ -288,3 +270,48 @@ class DrawableLabel(QLabel):
             painter.setPen(pen)
             painter.setBrush(QColor(0, 255, 0, 50))
             painter.drawRect(self.current_rect)
+        
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        # Left Click: Start Drawing
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.is_drawing = True
+            self.start_point = event.position().toPoint()
+            self.current_rect = QRect(self.start_point, self.start_point)
+            self.update()
+            
+        # Right Click: Open Modal
+        elif event.button() == Qt.MouseButton.RightButton:
+            if self.camera_id:
+                self.right_clicked.emit(self.camera_id)
+        
+    def get_2d_projections(self):
+        """Returns the currently projected 2D boxes in raw image coordinates."""
+        if self.intrinsic is None or self.extrinsic is None:
+            return []
+        
+        projections = []
+        for box in self.current_boxes_3d:
+            overrides = getattr(box, "visual_overrides", {})
+            is_manual_override = False
+            
+            if self.camera_id and self.camera_id in overrides:
+                rect_2d = overrides[self.camera_id]
+                is_manual_override = True
+            else:
+                rect_2d = GeometryUtils.project_box_to_image(
+                    box, self.extrinsic, self.intrinsic, (self.orig_height, self.orig_width)
+                )
+                
+            if not rect_2d:
+                continue
+                
+            rx, ry, rw, rh = rect_2d
+            color = QColor(255, 255, 0) if box.selected else self.label_color_map.get(box.label, QColor(0, 255, 0))
+                
+            projections.append({
+                'x': rx, 'y': ry, 'w': rw, 'h': rh,
+                'label': f"{box.track_id}: {box.label}",
+                'color': color,
+                'is_override': is_manual_override
+            })
+        return projections
