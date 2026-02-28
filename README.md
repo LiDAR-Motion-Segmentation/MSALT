@@ -39,11 +39,13 @@ chmod +x msalt
 # or use to run with uv
 uv run main.py
 ```
-![alt text](./assets/ui_v12.png)
+![alt text](./assets/ui_v13.png)
 
 ## Model weights
-- Download the SAM 2 checkpoints and place them in the checkpoints/ directory (create if missing).
+- Download the SAM 2 checkpoints and place them in the directory.
 - [Download sam2_hiera_large.pt](https://github.com/facebookresearch/sam2)
+- Download the YOlO26 model and place them in the directory
+- [Download yolo26l.pt](https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26l.pt)
 
 ## Controls & shortcuts
 | Context | Key / Action | Description |
@@ -252,6 +254,7 @@ labels:
 |       |   ├── annotation_list.py
 |       |   ├── automation_panel.py
 |       |   ├── batch_view.py
+|       |   ├── camera_modal.py
 │       │   ├── camera_view.py
 │       │   ├── drawable_label.py
 |       |   ├── inspector_view.py
