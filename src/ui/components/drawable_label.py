@@ -207,18 +207,6 @@ class DrawableLabel(QLabel):
             painter.setPen(pen)
             painter.setBrush(QColor(0, 255, 0, 50))
             painter.drawRect(self.current_rect)
-            
-    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            # CLEAR THE ACCIDENTAL DRAWING STATE
-            self.is_drawing = False
-            self.current_rect = None
-            self.start_point = None
-            self.update()  # Force repaint to erase the phantom green box
-            
-            if self.camera_id:
-                self.double_clicked.emit(self.camera_id)
-        super().mouseDoubleClickEvent(event)
         
     def mousePressEvent(self, event: QMouseEvent) -> None:
         # Left Click: Start Drawing
