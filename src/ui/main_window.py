@@ -179,6 +179,10 @@ class MainWindow(QMainWindow):
         # Connect the 3D click signal to your selection handler
         self.lidar_widget.box_selected_3d.connect(self.select_box_from_3d)
         
+        # YOLO+SAM2 button
+        self.automation_panel.tracking_requested.connect(self.predict_forward_selection)
+        self.automation_panel.yolo_requested.connect(self.run_yolo_pipeline)
+        
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
 
@@ -300,7 +304,7 @@ class MainWindow(QMainWindow):
         """ Update the slot definition to accept the bool"""
         self.handle_annotation(cam_id, x, y, w, h, is_override)
 
-    def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int, is_override: bool):
+    def handle_annotation(self, cam_id: str, x: int, y: int, w: int, h: int, is_override: bool, is_auto: bool = False):
         current_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
         selected_box = next((b for b in current_boxes if b.selected), None)
         
@@ -423,6 +427,17 @@ class MainWindow(QMainWindow):
             # Create the Box Object
             new_box = BoundingBox3D(**box_params)
             new_box.label = self.list_panel.get_current_label()
+            
+            if is_auto:
+                existing_boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+                for e_box in existing_boxes:
+                    # Calculate Bird's-Eye-View (X, Y) Euclidean Distance
+                    dist = np.hypot(new_box.x - e_box.x, new_box.y - e_box.y)
+                    
+                    # Threshold: 0.8 meters. If centers are this close, it's the same object!
+                    if dist < 0.8: 
+                        logger.info(f"Duplicate 3D box suppressed (Distance: {dist:.2f}m)")
+                        return  # Throw away this duplicate!
 
             # Save indices for Red Coloring
             new_box.point_indices = np.where(mask_3d)[0]
@@ -804,3 +819,53 @@ class MainWindow(QMainWindow):
             # Visually update the UI list
             self.refresh_views_only()
             self.statusBar().showMessage(f"Selected Box ID: {track_id}", 2000)
+            
+    def run_yolo_pipeline(self):
+        """Runs YOLO on all cameras and feeds the boxes into the SAM2->LiDAR pipeline."""
+        if self.current_frame_data is None or not self.current_frame_data.images:
+            self.statusBar().showMessage("No images available for YOLO.", 2000)
+            return
+
+        self.statusBar().showMessage("Running YOLO Auto-Annotation...", 5000)
+        from PyQt6.QtWidgets import QApplication
+        QApplication.processEvents() # Force UI update before heavy inference
+
+        # Map COCO indices to your config labels
+        coco_to_msalt = {
+            0: "moving_people", 
+            2: "moving_car",
+            3: "moving_car", # Motorcycle -> Car for now based on your config
+            5: "moving_car", # Bus -> Car
+            7: "moving_car"  # Truck -> Car
+        }
+
+        total_boxes_created = 0
+
+        # Iterate over every camera view available in the current frame
+        for cam_id, image in self.current_frame_data.images.items():
+            logger.info(f"Running YOLO on {cam_id}...")
+            detections = self.seg_engine.get_yolo_detection(image)
+
+            for det in detections:
+                x, y, w, h = det['box']
+                cls_id = det['class_id']
+
+                # Get the string label
+                msalt_label = coco_to_msalt.get(cls_id, "unknown")
+
+                # Temporarily spoof the UI list panel so `handle_annotation` uses the YOLO label
+                original_label = self.list_panel.get_current_label()
+                self.list_panel.combo_label.setCurrentText(msalt_label)
+
+                # Deselect everything so it creates a NEW box instead of overriding
+                self.annotation_manager.deselect_all()
+
+                # Feed the YOLO box directly into your existing SAM2->LiDAR pipeline!
+                self.handle_annotation(cam_id, x, y, w, h, is_override=False, is_auto=True)
+
+                # Restore the UI dropdown
+                self.list_panel.combo_label.setCurrentText(original_label)
+                total_boxes_created += 1
+
+        self.refresh_views_only()
+        self.statusBar().showMessage(f"YOLO generated {total_boxes_created} new 3D boxes!", 4000)
