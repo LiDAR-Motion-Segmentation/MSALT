@@ -8,3 +8,9 @@ tracking:
   name: "SAM2-tracking"
   weights: "sam2_b.pt"
   conf_threshold: 0.5
+
+detection:
+  name: "YOLO26"
+  weights: "yolo26l.pt"
+  conf_threshold: 0.4
+  classes: [0, 2, 3, 5, 7] # COCO indices: Person, Car, Motorcycle, Bus, Truck
