@@ -54,3 +54,4 @@ RUN uv sync --frozen --no-install-project
 
 # Download Weights (Cached in image)
 RUN wget -q https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_base_plus.pt -O sam2_b.pt || true
+RUN wget -q https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26l.pt -O yolo26l.pt || true
