@@ -140,21 +140,24 @@ class NuScenesEvaluator(BaseEvaluator):
         limit = min(len(self.loader), self.cfg.num_frames)
         user_dir = Path(self.cfg.output_dir) / "3d"
         
-        radius_text = f" (Radius: <= {self.max_radius}m)" if self.max_radius else " (All Distances)"
+        # Ensure radius filter text is printed if it exists
+        radius_text = f" (Radius: <= {self.max_radius}m)" if getattr(self, 'max_radius', None) else " (All Distances)"
         print(f"\nEvaluating {limit} frames for Scene {self.cfg.scene_id}{radius_text}...")
-        print(f"{'Frame':<6} | {'Class':<10} | {'GT':<3} | {'Pred':<4} | {'Best IoU':<8} | {'Status'}")
-        print("-" * 65)
+       
+        print(f"{'Frame':<6} | {'Class':<10} | {'GT':<3} | {'Pred':<4} | {'Best IoU':<8} | {'Status':<10} | {'GT Pts':<8} | {'Pred Pts':<8} | {'Err/Obj'}")
+        print("-" * 95)
         
         for i in range(limit):
             frame = self.loader.get(i)
             
-            # parsing boxes
+            # Parse boxes
             gt_std = self._parse_gt_box(frame.metadata.get('gt_boxes', []))
             pred_std = self._parse_user_json(user_dir / f"{i:06d}.json")
             
-            # applied distance filter
-            gt_std = self._filter_by_radius(gt_std)
-            pred_std = self._filter_by_radius(pred_std)
+            # Apply Distance Filter 
+            if hasattr(self, '_filter_by_radius'):
+                gt_std = self._filter_by_radius(gt_std)
+                pred_std = self._filter_by_radius(pred_std)
             
             points = getattr(frame, 'point_cloud', np.array([]))
             
@@ -192,13 +195,29 @@ class NuScenesEvaluator(BaseEvaluator):
             for label in all_labels:
                 cls_gt = [b for b in gt_std if b['label'] == label]
                 cls_pred = [b for b in pred_std if b['label'] == label]
-                self._match_and_update(i, label, cls_gt, cls_pred)
                 
-    def _match_and_update(self, frame_idx, label, gt_list, pred_list):
+                c_gt_p = frame_gt_pts[label]
+                c_pr_p = frame_pred_pts[label]
+                c_objs = max(frame_gt_objs[label], frame_pred_objs[label])
+                
+                self._match_and_update(i, label, cls_gt, cls_pred, c_gt_p, c_pr_p, c_objs)
+                
+    def _match_and_update(self, frame_idx, label, gt_list, pred_list, gt_pts, pred_pts, objs):
         metrics = self.metrics[label]
         matched_gt = set()
         
-        for p_box in pred_list:
+        # Calculate Error per Object for this specific frame
+        err_per_obj = (abs(gt_pts - pred_pts) / objs) if objs > 0 else 0.0
+        
+        # Edge Case: Ground Truth exists, but no predictions were made
+        if not pred_list:
+            fn = len(gt_list)
+            metrics.fn += fn
+            if fn > 0:
+                print(f"{frame_idx:<6} | {label:<10} | {len(gt_list):<3} | -    | -        | {'Missed ' + str(fn):<10} | {gt_pts:<8} | {pred_pts:<8} | {err_per_obj:<7.2f}")
+            return
+
+        for p_idx, p_box in enumerate(pred_list):
             best_iou = 0.0
             best_gt_idx = -1
             
@@ -219,12 +238,16 @@ class NuScenesEvaluator(BaseEvaluator):
             else:
                 metrics.fp += 1
                 
-            print(f"{frame_idx:<6} | {label:<10} | {len(gt_list):<3} | {len(pred_list):<4} | {best_iou:.2f}     | {status}")
+            # We only print the point stats on the FIRST line for each class to keep the console clean
+            if p_idx == 0:
+                print(f"{frame_idx:<6} | {label:<10} | {len(gt_list):<3} | {len(pred_list):<4} | {best_iou:<8.2f} | {status:<10} | {gt_pts:<8} | {pred_pts:<8} | {err_per_obj:<7.2f}")
+            else:
+                print(f"{frame_idx:<6} | {label:<10} | {len(gt_list):<3} | {len(pred_list):<4} | {best_iou:<8.2f} | {status:<10} | {'-':<8} | {'-':<8} | {'-':<7}")
             
         fn = len(gt_list) - len(matched_gt)
         metrics.fn += fn
         if fn > 0:
-            print(f"{frame_idx:<6} | {label:<10} | {len(gt_list):<3} | -    | -        | Missed {fn}")
+            print(f"{frame_idx:<6} | {label:<10} | {len(gt_list):<3} | -    | -        | {'Missed ' + str(fn):<10} | {'-':<8} | {'-':<8} | {'-':<7}")
             
     def print_report(self):
         print("\n" + "="*85)
@@ -248,7 +271,7 @@ class NuScenesEvaluator(BaseEvaluator):
             print(f"{'AVERAGE':<15} | {'-':<10} | {'-':<10} | {sum(f1s)/len(f1s):.2f}       | {sum(ious)/len(ious):.2f}       | -")
         print("="*85 + "\n")
 
-        # 2. Print Point-Wise Report
+        # Print Point-Wise Report
         print("="*85)
         print(f"  POINT-WISE BENCHMARK REPORT: SCENE {self.cfg.scene_id}  ")
         print("="*85)
