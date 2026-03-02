@@ -69,7 +69,6 @@ sudo systemctl restart docker
   | :------------ | :-------------------------------------------------------------------- |
   | Nvidia Driver | - Ubuntu 22.04 `>=515.43.04` 
   
-- Check [Docker docs](/docs/docker.md) for more information on docker and Nvidia.
 
 ```
 # also run this command locally before proceding
