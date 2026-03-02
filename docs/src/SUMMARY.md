@@ -4,8 +4,8 @@
 
 # Getting Started
 - [Installation & Requirements](setup/installation.md)
-- [Configuration (Hydra)](setup/configuration.md)
-- [Sensor Setup & Calibration](setup/sensors.md)
+- [Label Configuration](setup/configuration.md)
+- [Sensor Setup and configuration & Calibration](setup/sensors.md)
 
 # User Interface
 - [UI Overview & Layout](ui/overview.md)
@@ -28,3 +28,4 @@
 - [System Architecture](dev/architecture.md)
 - [The Data Controller](dev/data_controller.md)
 - [Geometry & Raycasting Math](dev/geometry.md)
+- [Testing](dev/testing.md)
