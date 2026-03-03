@@ -255,11 +255,12 @@ class AnnotationManager:
                 if not calib: 
                     break
             
-                # SAM2 inference
+               # SAM2 inference
                 mask = seg_engine.get_mask_from_box(image, rect_2d)
-                if mask is not None: 
+                
+                if mask is None: 
                     logger.warning(f"Frame {f_idx}: SAM returned no mask")
-            
+                else:
                     uv, valid = GeometryUtils.project_lidar_to_image(points, calib['extrinsic'], calib['intrinsic'])
                         
                     if hasattr(mask, 'cpu'): 
@@ -279,20 +280,21 @@ class AnnotationManager:
                     on_mask = mask[candidate_uv[:, 1], candidate_uv[:, 0]]
                     object_indices = candidate_indices[on_mask]
                     
-                if len(object_indices) >= 10:
-                    object_points = points[object_indices]
-                    new_box = GeometryUtils.fit_box_with_pca(
-                        object_points,
-                        current_box,
-                        eps=dbscan_eps,
-                        min_samples=dbscan_min_samples,
-                    )
-                    if new_box:
-                        logger.info(f"Frame {f_idx}: Tracked via SAM ({best_cam_id})")
-                    else:
-                        logger.warning(
-                            f"Frame {f_idx}: Only found {len(object_indices)} points on mask (Too few)"
-                        ) 
+                    # Only check length if the mask logic successfully ran
+                    if len(object_indices) >= 10:
+                        object_points = points[object_indices]
+                        new_box = GeometryUtils.fit_box_with_pca(
+                            object_points,
+                            current_box,
+                            eps=dbscan_eps,
+                            min_samples=dbscan_min_samples,
+                        )
+                        if new_box:
+                            logger.info(f"Frame {f_idx}: Tracked via SAM ({best_cam_id})")
+                        else:
+                            logger.warning(
+                                f"Frame {f_idx}: PCA Fit failed on {len(object_points)} mask points"
+                            ) 
             
             # lidar tracking
             if new_box is None:
