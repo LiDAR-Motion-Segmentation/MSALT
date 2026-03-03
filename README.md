@@ -530,6 +530,16 @@ AVERAGE / TOTAL | 158        | 1557         | 1345         | 1.56
 =====================================================================================
 ```
 
+### Docs
+- used mdbooks to generate the docs
+```
+# to open the docs in a new browser
+mdbook serve --open
+
+# to build the docs use
+mdbook build
+```
+
 
 ## Acknowledgement
 - I would like to thank my advisor [Dr. K. Madhava Krishna](https://madhavak-iiith.github.io/), IIIT Hyderabad for guiding me through this project and also my collaborators for advice

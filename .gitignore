@@ -15,6 +15,11 @@ outputs/
 *.las
 *.bag
 SALT_outputs_annotations/
+MSALT_outputs_annotations_nuscenes_scene_1/
+MSALT_outputs_annotations_nuscenes_scene_2/
+MSALT_outputs_annotations_nuscenes_v2/
+MSALT_outputs_annotations_nuscenes/
+MSALT_outputs_annotations_kitti/
 
 # Model Weights
 *.pt
