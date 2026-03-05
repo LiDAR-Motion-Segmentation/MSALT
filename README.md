@@ -534,6 +534,7 @@ AVERAGE / TOTAL | 158        | 1557         | 1345         | 1.56
 - used mdbooks to generate the docs
 ```
 # to open the docs in a new browser
+cd docs/
 mdbook serve --open
 
 # to build the docs use
