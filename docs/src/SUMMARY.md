@@ -26,6 +26,6 @@
 
 # Developer Guide
 - [System Architecture](dev/architecture.md)
-- [The Data Controller](dev/data_controller.md)
+<!-- - [The Data Controller](dev/data_controller.md) -->
 - [Geometry & Raycasting Math](dev/geometry.md)
 - [Testing](dev/testing.md)
