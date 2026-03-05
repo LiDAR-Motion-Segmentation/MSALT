@@ -2,7 +2,7 @@ defaults:
   - _self_  
 
 # Benchmark Settings
-output_dir: "/home/soumoroy/SALT/MSALT_outputs_annotations_nuscenes_v2/"                   
+output_dir: "/home/soumoroy/SALT/MSALT_outputs_annotations_nuscenes_scene_2/"                   
 data_root: "/home/soumoroy/Downloads/v1.0-mini"                                       
 scene_id: 2                                           
 num_frames: 10                                        

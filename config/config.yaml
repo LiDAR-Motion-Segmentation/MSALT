@@ -8,7 +8,7 @@ app:
   window_size: [1600, 900]
 
 output:
-  dir: "${hydra:runtime.cwd}/MSALT_outputs_annotations_nuscenes"
+  dir: "${hydra:runtime.cwd}/MSALT_outputs_annotations_nuscenes_scene_2"
 
 labels:
   - name: "moving_people"
