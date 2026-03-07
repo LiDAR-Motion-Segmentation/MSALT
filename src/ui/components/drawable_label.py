@@ -18,6 +18,9 @@ class DrawableLabel(QLabel):
     
     # Emit the camera_id when double-clicked
     right_clicked = pyqtSignal(str)
+    
+    # Add this near the top of the class
+    hovered = pyqtSignal(int, int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -43,6 +46,7 @@ class DrawableLabel(QLabel):
         
         # Default Map (Green Fallback)
         self.label_color_map = {}
+        self.setMouseTracking(True)
 
     def set_original_resolution(self, w: int, h: int) -> None:
         self.orig_width = w
@@ -65,10 +69,18 @@ class DrawableLabel(QLabel):
         self.update()
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if self.is_drawing and self.start_point:
-            current_pos = event.position().toPoint()
-            self.current_rect = QRect(self.start_point, current_pos).normalized()
-            self.update()
+        # If dragging to draw a box, do the normal box logic
+        if event.buttons() & Qt.MouseButton.LeftButton:   
+            if self.is_drawing and self.start_point:
+                current_pos = event.position().toPoint()
+                self.current_rect = QRect(self.start_point, current_pos).normalized()
+                self.update()
+                
+        # If just hovering with no buttons pressed, emit the coordinates
+        elif event.buttons() == Qt.MouseButton.NoButton:
+            self.hovered.emit(event.pos().x(), event.pos().y())
+            
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.is_drawing:
