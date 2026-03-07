@@ -12,6 +12,7 @@
 - [3D LiDAR View](ui/lidar_view.md)
 - [2D Camera Strip & Pop-Out Modal](ui/camera_view.md)
 - [Inspector & Batch Grid View](ui/inspector_grid.md)
+- [Occlusion Mode](ui/occlusion_mode.md)
 
 # Annotation Workflows
 - [Manual 3D Drawing](workflows/manual_drawing.md)
