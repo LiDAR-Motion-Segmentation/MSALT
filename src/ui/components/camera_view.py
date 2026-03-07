@@ -17,8 +17,9 @@ class CameraStripWidget(BasePluginWidget):
     """
     Manages the row of camera views. 
     """
-    # New Signal: (CameraID, x, y, w, h, is_override)
+    # (CameraID, x, y, w, h, is_override)
     box_drawn = pyqtSignal(str, int, int, int, int, bool)
+    pixel_hovered = pyqtSignal(str, float, float) # cam_id, u, v
 
     def __init__(self, camera_ids: List[str]):
         super().__init__(title="camera strip")
@@ -65,6 +66,10 @@ class CameraStripWidget(BasePluginWidget):
 
             lbl_img.selection_finished.connect(
                 lambda x, y, w, h, cid=cam_id: self._on_box_drawn(cid, x, y, w, h)
+            )
+            
+            lbl_img.hovered.connect(
+                lambda x, y, cid=cam_id: self._on_pixel_hovered(cid, x, y)
             )
             
             lbl_img.right_clicked.connect(self._on_label_right_clicked)
@@ -175,3 +180,26 @@ class CameraStripWidget(BasePluginWidget):
                 
                 # Fire the exact same signal the main window relies on!
                 self.box_drawn.emit(cam_name, x, y, w, h, is_override)
+                
+    def _on_pixel_hovered(self, cam_id: str, x: int, y: int):
+        pixmap = self.image_labels[cam_id].pixmap()
+        if not pixmap or not hasattr(self.image_labels[cam_id], 'orig_width'): 
+            return
+            
+        orig_w = self.image_labels[cam_id].orig_width
+        orig_h = self.image_labels[cam_id].orig_height
+        
+        # Scale UI pixel to Raw Image Pixel
+        widget_w = self.image_labels[cam_id].width()
+        widget_h = self.image_labels[cam_id].height()
+        
+        if widget_w == 0 or widget_h == 0:
+            return
+        
+        scale_x = orig_w / widget_w
+        scale_y = orig_h / widget_h
+        
+        u = x * scale_x
+        v = y * scale_y
+        
+        self.pixel_hovered.emit(cam_id, u, v)

@@ -226,6 +226,7 @@ class MainWindow(QMainWindow):
         """ Wiring the Playback -> Controller -> UI. """
         self.playback.frame_changed.connect(self.load_frame)
         self.cam_widget.box_drawn.connect(self.handle_annotation)
+        self.cam_widget.pixel_hovered.connect(self._handle_camera_hover)
         
     def open_grid_view(self):
         """Opens the Grid Window for the currently selected track."""
@@ -868,3 +869,70 @@ class MainWindow(QMainWindow):
 
         self.refresh_views_only()
         self.statusBar().showMessage(f"YOLO generated {total_boxes_created} new 3D boxes!", 4000)
+        
+    def _handle_camera_hover(self, cam_id: str, u: float, v: float):
+        """
+        Back-project a 2D pixel (u, v) from the hovered camera image into a 3D
+        ray in LiDAR coordinates, then find the closest point on the point cloud
+        along that ray for occlusion-aware highlighting.
+        """
+        frame_data = self.data_controller.get(self.current_frame_idx)
+        calib = self.data_controller.get_calibration(cam_id)
+        
+        if not frame_data or not calib or frame_data.point_cloud is None:
+            self.lidar_widget.update_laser_pointer(None, None)
+            return
+        
+        K = calib.get("intrinsic")
+        E = calib.get("extrinsic")  # Camera -> LiDAR pose (same convention as GeometryUtils)
+        if K is None or E is None:
+            self.lidar_widget.update_laser_pointer(None, None)
+            return
+        
+        # Build the camera-frame ray from the pixel using intrinsics
+        K_inv = np.linalg.inv(K)
+        ray_cam = GeometryUtils.pixel_to_ray(u, v, K_inv)
+        
+        # Transform the ray into LiDAR/world coordinates
+        R_cam_lidar = E[:3, :3]
+        cam_origin_lidar = E[:3, 3]
+        
+        ray_lidar = R_cam_lidar @ ray_cam
+        norm = np.linalg.norm(ray_lidar)
+        if norm < 1e-6:
+            self.lidar_widget.update_laser_pointer(None, None)
+            return
+        ray_lidar = ray_lidar / norm
+        
+        # Find the Exact Point (Occlusion Resolution)
+        points = frame_data.point_cloud[:, :3]
+        vectors = points - cam_origin_lidar
+        
+        # Project all LiDAR points onto the Ray to find Depth (t)
+        t = np.dot(vectors, ray_lidar)
+        
+        # Ignore points behind the camera
+        valid_mask = t > 0
+        valid_points = points[valid_mask]
+        valid_vectors = vectors[valid_mask]
+        valid_t = t[valid_mask]
+        
+        hit_point = None
+        if len(valid_points) > 0:
+            # Calculate Orthogonal Distance from Ray to each Point
+            proj_vectors = np.outer(valid_t, ray_lidar)
+            rejection = valid_vectors - proj_vectors
+            distances = np.linalg.norm(rejection, axis=1)
+            
+            # Find points that the ray essentially passes "through" (e.g. within 30cm)
+            close_mask = distances < 0.3
+            if np.any(close_mask):
+                close_points = valid_points[close_mask]
+                close_t = valid_t[close_mask]
+                
+                # The true object is the one closest to the camera!
+                best_idx = np.argmin(close_t)
+                hit_point = close_points[best_idx]
+        
+        # Send data to renderer (origin, ray, and optional hit point)
+        self.lidar_widget.update_laser_pointer(cam_origin_lidar, ray_lidar, hit_point)

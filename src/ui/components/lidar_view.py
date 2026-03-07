@@ -4,7 +4,7 @@ from PyQt6.QtCore import QRect, Qt, pyqtSignal
 import pyqtgraph.opengl as gl
 import numpy as np
 import logging
-from PyQt6.QtWidgets import QVBoxLayout
+from PyQt6.QtWidgets import QVBoxLayout, QCheckBox, QHBoxLayout
 from src.ui.interfaces import BasePluginWidget
 from src.data.structures import FrameData
 from src.core.objects import BoundingBox3D
@@ -359,6 +359,24 @@ class CustomGLWidget(gl.GLViewWidget):
         painter.setPen(QColor(255, 0, 255)) 
         painter.end()          
         
+    def update_laser_pointer(self, origin, direction, hit_point=None):
+        if origin is None or direction is None:
+            self.laser_ray.setVisible(False)
+            self.laser_hit.setVisible(False)
+            return
+            
+        # Draw a 100m long line originating from the camera lens
+        end_pt = origin + (direction * 100.0)
+        self.laser_ray.setData(pos=np.vstack([origin, end_pt]))
+        self.laser_ray.setVisible(True)
+        
+        # Snap a giant red dot to the closest physical point
+        if hit_point is not None:
+            self.laser_hit.setData(pos=np.array([hit_point]))
+            self.laser_hit.setVisible(True)
+        else:
+            self.laser_hit.setVisible(False)        
+        
 class LidarVisualizer(BasePluginWidget):
     box_selected_3d = pyqtSignal(int)
     
@@ -381,6 +399,16 @@ class LidarVisualizer(BasePluginWidget):
         self._original_mouse_release = self.view_widget.mouseReleaseEvent
         self.view_widget.mouseReleaseEvent = self._on_gl_mouse_release
         
+        # Laser Pointer Ray
+        self.laser_ray = gl.GLLinePlotItem(color=(1.0, 0.0, 0.0, 0.5), width=2, antialias=True)
+        self.laser_ray.setVisible(False)
+        self.view_widget.addItem(self.laser_ray)
+        
+        # Laser Pointer Intersection Dot
+        self.laser_hit = gl.GLScatterPlotItem(color=(1.0, 0.0, 0.0, 1.0), size=10)
+        self.laser_hit.setVisible(False)
+        self.view_widget.addItem(self.laser_hit)
+        
     def set_label_colors(self, label_config: List[Dict]):
         """
         Populate the color lookup dictionary.
@@ -401,6 +429,15 @@ class LidarVisualizer(BasePluginWidget):
         self.view_widget.ground_z = float(self.default_ground_z)
         self.view_widget.opts["distance"] = 20
         self.view_widget.setWindowTitle("LiDAR Viewer")
+        
+        toolbar = QHBoxLayout()
+                
+        self.chk_occlusion = QCheckBox("Occlusion Mode")
+        self.chk_occlusion.setStyleSheet("color: #FFFFFF; font-weight: bold;") # Red Text
+        self.chk_occlusion.toggled.connect(self.toggle_occlusion)
+        toolbar.addWidget(self.chk_occlusion)
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
 
         # grid
         grid = gl.GLGridItem()
@@ -410,6 +447,8 @@ class LidarVisualizer(BasePluginWidget):
         # Scatter Plot (The Point Cloud)
         self.scatter = gl.GLScatterPlotItem()
         self.view_widget.addItem(self.scatter)
+        
+        self.occlusion_mode = False # Default state
 
         layout.addWidget(self.view_widget)
 
@@ -573,3 +612,27 @@ class LidarVisualizer(BasePluginWidget):
         # Emit the selected ID to the main window
         if closest_hit_id != -1:
             self.box_selected_3d.emit(closest_hit_id)
+            
+    def update_laser_pointer(self, origin, direction, hit_point=None):
+        if not getattr(self, 'occlusion_mode', False) or origin is None or direction is None:
+            self.laser_ray.setVisible(False)
+            self.laser_hit.setVisible(False)
+            return
+            
+        # Draw a 100m long line originating from the camera lens
+        end_pt = origin + (direction * 100.0)
+        self.laser_ray.setData(pos=np.vstack([origin, end_pt]))
+        self.laser_ray.setVisible(True)
+        
+        # Snap a giant red dot to the closest physical point
+        if hit_point is not None:
+            self.laser_hit.setData(pos=np.array([hit_point]))
+            self.laser_hit.setVisible(True)
+        else:
+            self.laser_hit.setVisible(False)  
+            
+    def toggle_occlusion(self, checked):
+        self.occlusion_mode = checked
+        if not checked:
+            # Turn the laser off instantly when unchecked
+            self.update_laser_pointer(None, None)
