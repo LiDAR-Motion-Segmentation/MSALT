@@ -470,11 +470,15 @@ class LidarVisualizer(BasePluginWidget):
         if self.current_points is None: 
             return
         
+        persisted_size = getattr(self, 'current_point_size', 2)
+        
         z = self.current_points[:, 2]
         colors = np.ones((len(z), 4))
         colors[:, 0] = np.clip((z + 2.0) / 5.0, 0, 1) 
         colors[:, 1] = 0.5
-        self.scatter.setData(pos=self.current_points, color=colors, size=2)
+        self.scatter.setData(pos=self.current_points, 
+                             color=colors, 
+                             size=persisted_size)
 
     def update_boxes(self, boxes: list[BoundingBox3D]):
         self.view_widget.overlay_boxes = boxes
@@ -506,7 +510,10 @@ class LidarVisualizer(BasePluginWidget):
                     # box.color = target_color
 
             # Update the scatter plot
-            self.scatter.setData(pos=points, color=colors, size=2)
+            persisted_size = getattr(self, 'current_point_size', 2)
+            self.scatter.setData(pos=points, 
+                                 color=colors, 
+                                 size=persisted_size)
 
         # Draw new box lines
         # Connectivity for a cube wireframe (lines between corner indices)
@@ -555,7 +562,8 @@ class LidarVisualizer(BasePluginWidget):
         self.view_widget.update()
 
     def reset(self):
-        self.scatter.setData(pos=np.zeros((0, 3)))
+        persisted_size = getattr(self, 'current_point_size', 2)
+        self.scatter.setData(pos=np.zeros((0, 3)),size=persisted_size)
         
     def get_box_color(self, box):
         if box.selected:
@@ -636,3 +644,11 @@ class LidarVisualizer(BasePluginWidget):
         if not checked:
             # Turn the laser off instantly when unchecked
             self.update_laser_pointer(None, None)
+            
+    def set_point_size(self, size: int):
+        """Dynamically scales the size of the rendered LiDAR points."""
+        self.current_point_size = size
+        
+        # scatter is the gl.GLScatterPlotItem
+        if hasattr(self, 'scatter') and self.scatter is not None:
+            self.scatter.setData(size=size)      
