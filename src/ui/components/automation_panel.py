@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QSpinBox, QHBoxLayout
 from PyQt6.QtCore import pyqtSignal, Qt
 
 
@@ -8,6 +8,7 @@ class AutomationPanel(QWidget):
     grid_view_requested = pyqtSignal()
     tracking_requested = pyqtSignal()
     yolo_requested = pyqtSignal()
+    point_size_changed = pyqtSignal(int)
 
     def __init__(self):
         super().__init__()
@@ -98,6 +99,20 @@ class AutomationPanel(QWidget):
 
         layout.addStretch()
         self.setLayout(layout)
+        
+        size_layout = QHBoxLayout()
+        lbl_size = QLabel("PCD Point Size:")
+        lbl_size.setStyleSheet("color: #AAA;")
+        
+        self.spin_point_size = QSpinBox()
+        self.spin_point_size.setRange(1, 10) # Limit between 1 and 10 pixels
+        self.spin_point_size.setValue(2)     # Default size
+        self.spin_point_size.valueChanged.connect(self.point_size_changed.emit)
+        
+        size_layout.addWidget(lbl_size)
+        size_layout.addWidget(self.spin_point_size)
+        
+        layout.addLayout(size_layout) 
         
         self.btn_grid = QPushButton("Batch View (B)")
         self.btn_grid.clicked.connect(self.grid_view_requested.emit)
