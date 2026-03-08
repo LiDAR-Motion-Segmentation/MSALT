@@ -94,6 +94,7 @@ class MainWindow(QMainWindow):
         self.automation_panel.propagate_requested.connect(self.propagate_selection)
         self.automation_panel.interpolate_requested.connect(self.interpolate_selection)
         self.automation_panel.tracking_requested.connect(self.predict_forward_selection)
+        self.automation_panel.point_size_changed.connect(self.lidar_widget.set_point_size)
 
         # BOTTOM: Playback 
         self.playback = PlaybackWidget()
@@ -182,6 +183,10 @@ class MainWindow(QMainWindow):
         # YOLO+SAM2 button
         self.automation_panel.tracking_requested.connect(self.predict_forward_selection)
         self.automation_panel.yolo_requested.connect(self.run_yolo_pipeline)
+        
+        # Duplicate Box Shortcut
+        self.shortcut_duplicate = QShortcut(QKeySequence("Ctrl+D"), self)
+        self.shortcut_duplicate.activated.connect(self._duplicate_selected_box)
         
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
@@ -936,3 +941,35 @@ class MainWindow(QMainWindow):
         
         # Send data to renderer (origin, ray, and optional hit point)
         self.lidar_widget.update_laser_pointer(cam_origin_lidar, ray_lidar, hit_point)
+        
+    def _duplicate_selected_box(self):
+        """Duplicates the currently selected box and offsets it slightly."""
+        boxes = self.annotation_manager.get_boxes(self.current_frame_idx)
+        orig_box = next((b for b in boxes if getattr(b, 'selected', False)), None)
+        
+        if not orig_box:
+            return
+        
+        # Create a clone but shift it 1.0 meter to the left (Y-axis) and right (X-axis)
+        new_box = BoundingBox3D(
+            x=orig_box.x + 1.0, 
+            y=orig_box.y + 1.0, # The Offset!
+            z=orig_box.z,
+            dx=orig_box.dx, 
+            dy=orig_box.dy, 
+            dz=orig_box.dz,
+            heading=orig_box.heading,
+            label=orig_box.label
+        )
+        
+        # Assign a fresh ID
+        new_id = self.annotation_manager.get_unique_id()
+        new_box.track_id = new_id
+        
+        # Add it to the manager and auto-select the new clone
+        self.annotation_manager.add_box(self.current_frame_idx, new_box)
+        self.annotation_manager.select_box(self.current_frame_idx, new_id)
+        
+        # Force UI refresh
+        self.refresh_views_only()
+        self.save_current_work()
