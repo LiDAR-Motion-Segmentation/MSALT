@@ -9,6 +9,7 @@ class AutomationPanel(QWidget):
     tracking_requested = pyqtSignal()
     yolo_requested = pyqtSignal()
     point_size_changed = pyqtSignal(int)
+    open_analytics_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -113,6 +114,23 @@ class AutomationPanel(QWidget):
         size_layout.addWidget(self.spin_point_size)
         
         layout.addLayout(size_layout) 
+        
+        self.btn_analytics = QPushButton("QA Analytics & Telemetry")
+        self.btn_analytics.setStyleSheet("""
+            QPushButton {
+                background-color: #8BC34A; 
+                color: #111111; 
+                font-weight: bold; 
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #9CCC65;
+            }
+        """)
+        self.btn_analytics.clicked.connect(self.open_analytics_requested.emit)
+        
+        layout.addWidget(self.btn_analytics)
         
         self.btn_grid = QPushButton("Batch View (B)")
         self.btn_grid.clicked.connect(self.grid_view_requested.emit)

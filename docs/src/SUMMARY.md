@@ -24,6 +24,7 @@
 # Evaluation & Benchmarking
 <!-- - [Running the NuScenes Evaluator](benchmarking/nuscenes.md) -->
 - [Understanding the Metrics](benchmarking/metrics.md)
+- [QA Analytics](benchmarking/analytics_dashboard.md)
 
 # Developer Guide
 - [System Architecture](dev/architecture.md)

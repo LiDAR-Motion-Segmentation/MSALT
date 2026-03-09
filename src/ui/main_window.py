@@ -13,6 +13,7 @@ from src.ui.components.annotation_list import AnnotationListWidget
 from src.ui.components.inspector_view import InspectorWidget
 from src.ui.components.automation_panel import AutomationPanel
 from src.ui.components.batch_view import BatchGridWindow
+from src.ui.components.analytics_dashboard import AnalyticsDashboard
 
 from src.core.annotation_manager import AnnotationManager
 from src.core.objects import BoundingBox3D
@@ -95,6 +96,7 @@ class MainWindow(QMainWindow):
         self.automation_panel.interpolate_requested.connect(self.interpolate_selection)
         self.automation_panel.tracking_requested.connect(self.predict_forward_selection)
         self.automation_panel.point_size_changed.connect(self.lidar_widget.set_point_size)
+        self.automation_panel.open_analytics_requested.connect(self.open_analytics)
 
         # BOTTOM: Playback 
         self.playback = PlaybackWidget()
@@ -187,6 +189,10 @@ class MainWindow(QMainWindow):
         # Duplicate Box Shortcut
         self.shortcut_duplicate = QShortcut(QKeySequence("Ctrl+D"), self)
         self.shortcut_duplicate.activated.connect(self._duplicate_selected_box)
+        
+        # Analytics window
+        self.shortcut_analytics = QShortcut(QKeySequence("Ctrl+Shift+A"), self)
+        self.shortcut_analytics.activated.connect(self.open_analytics)
         
     def save_current_work(self):
         """Saves both 3D JSON and Metadata JSON using 000000.json format."""
@@ -973,3 +979,13 @@ class MainWindow(QMainWindow):
         # Force UI refresh
         self.refresh_views_only()
         self.save_current_work()
+        
+    def open_analytics(self):
+        # Fetch the total count safely from the controller
+        total_frames = self.data_controller.get_total_frames()
+        
+        # Prevent negative ranges if the dataset is empty
+        max_frames = total_frames - 1 if total_frames > 0 else 0 
+        
+        dialog = AnalyticsDashboard(self.annotation_manager, max_frames, self)
+        dialog.exec()
