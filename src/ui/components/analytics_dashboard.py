@@ -38,7 +38,7 @@ class AnalyticsDashboard(QDialog):
         self.spin_end.setValue(self.max_frames)
         
         self.btn_refresh = QPushButton("Compute Metrics")
-        self.btn_refresh.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        self.btn_refresh.setStyleSheet("background-color: #151B54; color: white; font-weight: bold;")
         self.btn_refresh.clicked.connect(self._compute_and_draw)
         
         ctrl_layout.addWidget(QLabel("Start Frame:"))
