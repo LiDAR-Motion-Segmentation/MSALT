@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         self.automation_panel.interpolate_requested.connect(self.interpolate_selection)
         self.automation_panel.tracking_requested.connect(self.predict_forward_selection)
         self.automation_panel.point_size_changed.connect(self.lidar_widget.set_point_size)
+        self.automation_panel.open_analytics_requested.connect(self.open_analytics)
 
         # BOTTOM: Playback 
         self.playback = PlaybackWidget()
