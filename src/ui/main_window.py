@@ -24,6 +24,7 @@ from src.core.commands import (
     AddBoxCommand, 
     BulkDeleteCommand
 )
+from src.core.ontology import OntologyValidator
 
 import logging
 import numpy as np
@@ -70,7 +71,8 @@ class MainWindow(QMainWindow):
 
         if self.data_controller.get_total_frames() > 0:
             self.load_frame(0)
-
+        
+        self._run_ontology_audit()
 
     def _init_ui(self):
         
@@ -989,3 +991,32 @@ class MainWindow(QMainWindow):
         
         dialog = AnalyticsDashboard(self.annotation_manager, max_frames, self)
         dialog.exec()
+        
+    def _run_ontology_audit(self):
+        """Runs the strict QA firewall after data is loaded."""
+        if not hasattr(self, 'labels_cfg') or not self.labels_cfg:
+            return
+            
+        validator = OntologyValidator(self.labels_cfg)
+        errors = validator.audit_dataset(self.annotation_manager.annotations)
+        
+        if errors:
+            # Log all errors to the console/file for debugging
+            for err in errors:
+                logger.error(f"QA Violation: {err}")
+                
+            # Show the first 10 errors to the user in a popup
+            display_errors = "\n".join(errors[:10])
+            if len(errors) > 10:
+                display_errors += f"\n... and {len(errors) - 10} more violations."
+                
+            # QMessageBox.critical(
+            #     self, 
+            #     "Critical QA Violations Detected", 
+            #     f"The loaded dataset violates the strict ontology schema.\n\n"
+            #     f"{display_errors}\n\n"
+            #     f"Please review the console logs and fix these annotations."
+            # )
+            
+        else:
+            logger.info("QA Audit Passed: No ontology or temporal ID violations found.")
