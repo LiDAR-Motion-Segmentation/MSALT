@@ -7,7 +7,6 @@ __pycache__/
 env/
 
 # Data (NEVER commit these)
-data/
 logs/
 outputs/
 *.pcd
