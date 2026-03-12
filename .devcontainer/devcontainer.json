@@ -19,8 +19,8 @@
 
     "mounts": [
         "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind",
-        "source=/home/soumoroy/Downloads/MCMPT_output_nice_op,target=/app/data,type=bind",
-        "source=/home/soumoroy/SALT/SALT_outputs_annotations,target=/app/annotations,type=bind"
+        "source=/home/soumoroy/MSALT/examples/data,target=/app/data,type=bind",
+        "source=/home/soumoroy/MSALT/examples/annotations,target=/app/annotations,type=bind"
     ],
 
     "customizations": {
@@ -38,9 +38,9 @@
     },
 
     "containerEnv": {
+        "NO_AT_BRIDGE": "1",
         "GTK_THEME": "Adwaita:dark",
-        "QT_QPA_PLATFORMTHEME": "gtk3",
-        "QT_STYLE_OVERRIDE": "adwaita-dark" 
+        "QT_QPA_PLATFORMTHEME": "gtk3"
     },
     
     "postCreateCommand": "uv sync --frozen"
