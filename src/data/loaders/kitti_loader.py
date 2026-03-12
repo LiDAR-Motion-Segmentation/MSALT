@@ -1,4 +1,3 @@
-from cProfile import label
 import numpy as np
 from pathlib import Path
 from PIL import Image
@@ -164,8 +163,10 @@ class SemanticKittiLoader:
         
         # Base Transformation: Lidar -> Rectified Cam 0
         Tr = np.eye(4)
-        if 'Tr' in data: Tr[:3, :4] = data['Tr']
-        elif 'Tr_velo_to_cam' in data: Tr[:3, :4] = data['Tr_velo_to_cam']
+        if 'Tr' in data: 
+            Tr[:3, :4] = data['Tr']
+        elif 'Tr_velo_to_cam' in data: 
+            Tr[:3, :4] = data['Tr_velo_to_cam']
         
         R0 = np.eye(4)
         if 'R0_rect' in data:
