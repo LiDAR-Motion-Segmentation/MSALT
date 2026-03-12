@@ -1,10 +1,10 @@
 defaults:
-  - msalt_setup: husky_setup  
+  - msalt_setup: docker_setup 
   - models: default
   - _self_
 
 app:
-  window_title: "MSALT: Multi Sensor Fusion Annotator"
+  window_title: "MSALT: Multi Sensor Annotation & Labelling Tool"
   window_size: [1600, 900]
 
 output:

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Optional
 from omegaconf import DictConfig
 import logging
 from src.data.structures import SensorConfig, FrameData, CameraConfig
