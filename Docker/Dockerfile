@@ -28,6 +28,10 @@ RUN apt-get update && apt-get install -y \
     libegl1 \
     libopengl0 \
     libdbus-1-3 \
+    adwaita-icon-theme-full \
+    gnome-themes-extra \
+    qt5-style-plugins \
+    libgtk-3-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Setup UV
