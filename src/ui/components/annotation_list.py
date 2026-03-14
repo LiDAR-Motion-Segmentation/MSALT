@@ -14,6 +14,7 @@ from src.core.objects import BoundingBox3D
 from src.data.structures import FrameData
 from typing import List, Dict
 
+
 class AnnotationListWidget(QWidget):
     # Signals
     box_selected = pyqtSignal(BoundingBox3D)  # When user clicks a row
@@ -26,7 +27,7 @@ class AnnotationListWidget(QWidget):
         self.label_config = label_config or [
             {"name": "Unknown", "color": [0, 255, 0], "hotkey": "0"}
         ]
-        self.color_map = {item['name']: item['color'] for item in self.label_config}
+        self.color_map = {item["name"]: item["color"] for item in self.label_config}
         self._init_ui()
         self._setup_hotkeys()
 
@@ -64,14 +65,16 @@ class AnnotationListWidget(QWidget):
         )
         btn_del.clicked.connect(self.delete_selected)
         self.layout.addWidget(btn_del)
-        
+
     def _setup_hotkeys(self):
         for i, item in enumerate(self.label_config):
             key = item.get("hotkey")
             if key:
                 shortcut = QShortcut(QKeySequence(key), self)
-                shortcut.activated.connect(lambda idx=i: self.set_active_label_index(idx))
-                
+                shortcut.activated.connect(
+                    lambda idx=i: self.set_active_label_index(idx)
+                )
+
     def set_active_label_index(self, index):
         if 0 <= index < self.combo_label.count():
             self.combo_label.setCurrentIndex(index)
@@ -80,7 +83,7 @@ class AnnotationListWidget(QWidget):
     def get_color_rgb(self, label_name: str) -> List[int]:
         """Returns [R, G, B] list. Defaults to Green."""
         return self.color_map.get(label_name, [0, 255, 0])
-        
+
     def update_list(self, boxes: list[BoundingBox3D]):
         self.list_widget.clear()
         self.current_boxes = boxes

@@ -6,6 +6,7 @@ from src.core.objects import BoundingBox3D
 from copy import deepcopy
 from typing import Optional
 
+
 class GeometryUtils:
     @staticmethod
     def project_lidar_to_image(
@@ -13,31 +14,31 @@ class GeometryUtils:
     ):
         """
         Projects 3D LiDAR points onto the 2D Image Plane.
-        
+
         Args:
             xyz: (N, 3) LiDAR points
             camera_pose: (4, 4) Matrix (Camera -> World/LiDAR)
             intr: (3, 3) Intrinsic Matrix
-            
+
         Returns:
             uv: (N, 2) Projected pixel coordinates
             valid: (N,) Boolean mask (True if point is in front of camera)
         """
         if len(xyz) == 0:
             return np.zeros((0, 2)), np.zeros(0, dtype=bool)
-        
+
         # Add homogenous coordinates
         pts_h = np.hstack([xyz, np.ones((xyz.shape[0], 1))])
-        
+
         # World -> Camera (Inverse of Pose)
         T_world_to_cam = np.linalg.inv(camera_pose)
         pts_cam = (T_world_to_cam @ pts_h.T).T[:, :3]
-        
+
         # Filter Z > 0
         z = pts_cam[:, 2]
-        
+
         # Small clip plane
-        valid = z > 0 
+        valid = z > 0
         pts_cam_valid = pts_cam[valid]
         proj = (intr @ pts_cam_valid.T).T  # (M, 3)
 
@@ -96,13 +97,13 @@ class GeometryUtils:
     ) -> np.ndarray:
         """
         Filters LiDAR points that project INSIDE a 2D bounding box.
-        
+
         Args:
             points: (N, 3) Cloud in LiDAR Frame
             bbox_2d: (min_x, min_y, max_x, max_y)
             K: (3, 3) Intrinsic Matrix
             T_lidar_to_cam: (4, 4) Extrinsics
-            
+
         Returns:
             mask: (N,) boolean array where True = inside box
         """
@@ -356,7 +357,7 @@ class GeometryUtils:
 
         # Clip to Image Dimensions
         h, w = image_shape[:2]
-        
+
         # Clamp to image
         min_x = np.clip(np.min(u_valid), 0, w)
         max_x = np.clip(np.max(u_valid), 0, w)
@@ -377,91 +378,91 @@ class GeometryUtils:
         Interpolates between two BoundingBox3D objects.
         t: 0.0 (start) to 1.0 (end)
         """
-        
+
         # linear interpolation for position & dimensions
         x = box_start.x + (box_end.x - box_start.x) * t
         y = box_start.y + (box_end.y - box_start.y) * t
         z = box_start.z + (box_end.z - box_start.z) * t
-        
+
         dx = box_start.dx + (box_end.dx - box_start.dx) * t
         dy = box_start.dy + (box_end.dy - box_start.dy) * t
         dz = box_start.dz + (box_end.dz - box_start.dz) * t
-        
+
         rot_diff = box_end.heading - box_start.heading
-        
+
         # Normalize diff to [-pi, pi]
         rot_diff = (rot_diff + np.pi) % (2 * np.pi) - np.pi
         heading = box_start.heading + rot_diff * t
-        
+
         return {
-            'x': x, 
-            'y': y, 
-            'z': z,
-            'dx': dx, 
-            'dy': dy, 
-            'dz': dz,
-            'heading': heading,
-            'label': box_start.label,    
-            'track_id': box_start.track_id
+            "x": x,
+            "y": y,
+            "z": z,
+            "dx": dx,
+            "dy": dy,
+            "dz": dz,
+            "heading": heading,
+            "label": box_start.label,
+            "track_id": box_start.track_id,
         }
-        
+
     @staticmethod
     def refine_heading(points: np.ndarray, current_heading: float) -> float:
         """
-        Uses PCA (Principal Component Analysis) to find the dominant axis 
+        Uses PCA (Principal Component Analysis) to find the dominant axis
         of the point cloud and align the heading.
-        
+
         Args:
             points: (N, 3) points inside the box.
             current_heading: The current yaw estimate (to fix 180-degree ambiguity).
-        
+
         Returns:
             new_heading: refined yaw in radians.
         """
         if len(points) < 5:
-            return current_heading # Not enough points to be reliable
-        
+            return current_heading  # Not enough points to be reliable
+
         # project to ground plane
         xy_points = points[:, :2]
-        
+
         # Center the points first to remove translation
         mean = np.mean(xy_points, axis=0)
         centered = xy_points - mean
-        
+
         # cov = (X.T @ X) / (N-1)
         cov = np.cov(centered.T)
-        
+
         # eigenvalues = magnitude of variance
         # eigenvectors = direction of variance
         evals, evecs = np.linalg.eig(cov)
-        
+
         # evecs are columns. evecs[:, i] corresponds to eval[i]
         idx = np.argmax(evals)
-        major_axis = evecs[:, idx] # [dx, dy] vector
-        
+        major_axis = evecs[:, idx]  # [dx, dy] vector
+
         # calculate angle from vector
         pca_heading = np.arctan2(major_axis[1], major_axis[0])
-        
+
         # normalize diff to [-pi, pi] to check alignment
         diff = pca_heading - current_heading
         diff = (diff + np.pi) % (2 * np.pi) - np.pi
-        
+
         if abs(diff) > (np.pi / 2):
             pca_heading += np.pi
-            
+
         # normalize final results to standard [-pi, pi] range
         pca_heading = (pca_heading + np.pi) % (2 * np.pi) - np.pi
-        
+
         return pca_heading
-    
+
     @staticmethod
     def screen_to_ray(
         mouse_x: int,
         mouse_y: int,
-        screen_w: int, 
+        screen_w: int,
         screen_h: int,
         view_matrix: np.ndarray,
-        proj_matrix: np.ndarray
+        proj_matrix: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Convert 2D screen coordinates to a 3D Ray (origin, direction)
@@ -480,58 +481,60 @@ class GeometryUtils:
         # OpenGL NDC(Normalized Device Coordinates): x=[-1, 1], y=[-1, 1] (y is up)
         ndc_x = (2.0 * mouse_x) / screen_w - 1.0
         ndc_y = 1.0 - (2.0 * mouse_y) / screen_h
-        
+
         # clip near plan and far plane
         clip_near = np.array([ndc_x, ndc_y, -1.0, 1.0])
         clip_far = np.array([ndc_x, ndc_y, 1.0, 1.0])
-        
+
         try:
             # We need to go from Clip Space -> World Space
             mvp = proj_matrix @ view_matrix
-            inv_mvp = np.linalg.inv(mvp) 
+            inv_mvp = np.linalg.inv(mvp)
         except np.linalg.LinAlgError:
             return np.zeros(3), np.array([0, 0, 1])
-        
+
         # unproject
         res_near = inv_mvp @ clip_near
         res_far = inv_mvp @ clip_far
-        
+
         # perspective divide
         if res_near[3] != 0:
             res_near /= res_near[3]
         if res_far[3] != 0:
             res_far /= res_far[3]
-            
+
         # form ray
         origin = res_near[:3]
         end = res_far[:3]
-        
+
         direction = end - origin
         norm = np.linalg.norm(direction)
         if norm > 1e-16:
             direction /= norm
-            
+
         return origin, direction
-    
+
     @staticmethod
-    def intersect_ray_plane(ray_origin: np.ndarray, ray_dir: np.ndarray, plane_z: float = 0.0) -> np.ndarray:
+    def intersect_ray_plane(
+        ray_origin: np.ndarray, ray_dir: np.ndarray, plane_z: float = 0.0
+    ) -> np.ndarray:
         """
         Finds the intersection point of a ray and a horizontal plane at Z = plane_z.
          Start + t * Dir = Target
          RayZ + t * DirZ = PlaneZ
          t = (PlaneZ - RayZ) / DirZ
         """
-        
+
         if abs(ray_dir[2]) < 1e-6:
-            return None # ray is parallel to the plane
-        
+            return None  # ray is parallel to the plane
+
         t = (plane_z - ray_origin[2]) / ray_dir[2]
-        
+
         if t < 0:
-            return None # intersection is behind the camera
-        
+            return None  # intersection is behind the camera
+
         return ray_origin + t * ray_dir
-    
+
     @staticmethod
     def fit_box_with_pca(
         points: np.ndarray,
@@ -544,19 +547,21 @@ class GeometryUtils:
         """
         if len(points) < 5:
             return None
-        
+
         clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(points)
         all_labels = clustering.labels_
         unique_labels = set(all_labels) - {-1}
         if not unique_labels:
             return None
-        
-        best_cluster = max(unique_labels, key=lambda cluster_id: np.sum(all_labels == cluster_id))
+
+        best_cluster = max(
+            unique_labels, key=lambda cluster_id: np.sum(all_labels == cluster_id)
+        )
         inliers = points[all_labels == best_cluster]
-        
-        if len(inliers) < 5: 
+
+        if len(inliers) < 5:
             return None
-        
+
         # PCA
         xy = inliers[:, :2]
         mean = np.mean(xy, axis=0)
@@ -564,20 +569,20 @@ class GeometryUtils:
         evals, evecs = np.linalg.eig(cov)
         major_axis = evecs[:, np.argmax(evals)]
         pca_heading = np.arctan2(major_axis[1], major_axis[0])
-        
+
         # resolving ambiguity
         diff = pca_heading - previous_box.heading
         diff = (diff + np.pi) % (2 * np.pi) - np.pi
-        if abs(diff) > (np.pi / 2): 
+        if abs(diff) > (np.pi / 2):
             pca_heading += np.pi
-        
+
         new_heading = (pca_heading + np.pi) % (2 * np.pi) - np.pi
-        
+
         # Fit Dimensions (Oriented)
         c, s = np.cos(-new_heading), np.sin(-new_heading)
         rot_mat = np.array([[c, -s], [s, c]])
         proj_xy = inliers[:, :2] @ rot_mat.T
-        
+
         min_xy, max_xy = np.min(proj_xy, axis=0), np.max(proj_xy, axis=0)
         min_z, max_z = np.min(inliers[:, 2]), np.max(inliers[:, 2])
 
@@ -587,77 +592,77 @@ class GeometryUtils:
 
         center_pca = (min_xy + max_xy) / 2.0
         center_world = center_pca @ np.linalg.inv(rot_mat).T
-        
+
         new_box = deepcopy(previous_box)
         new_box.x, new_box.y = center_world[0], center_world[1]
-        new_box.z = min_z + (new_dz/2)
+        new_box.z = min_z + (new_dz / 2)
         new_box.dx, new_box.dy, new_box.dz = new_dx, new_dy, new_dz
         new_box.heading = new_heading
-        
+
         return new_box
-    
+
     @staticmethod
-    def extrapolate_box(box: 'BoundingBox3D', velocity: dict, steps: int) -> 'BoundingBox3D':
+    def extrapolate_box(
+        box: "BoundingBox3D", velocity: dict, steps: int
+    ) -> "BoundingBox3D":
         """
         Projects a box 'steps' frames into the future based on a velocity vector.
         velocity = {'x': float, 'y': float, 'z': float, 'heading': float}
         """
-        
+
         # Linear projection
-        new_x = box.x + (velocity['x'] * steps)
-        new_y = box.y + (velocity['y'] * steps)
-        new_z = box.z + (velocity['z'] * steps)
-        
-        # Heading projection (Simple addition, normalization happens usually at render time 
+        new_x = box.x + (velocity["x"] * steps)
+        new_y = box.y + (velocity["y"] * steps)
+        new_z = box.z + (velocity["z"] * steps)
+
+        # Heading projection (Simple addition, normalization happens usually at render time
         # but good to normalize here to stay within -pi/pi)
-        new_heading = box.heading + (velocity['heading'] * steps)
-        while new_heading > np.pi: 
+        new_heading = box.heading + (velocity["heading"] * steps)
+        while new_heading > np.pi:
             new_heading -= 2 * np.pi
-        while new_heading < -np.pi: 
+        while new_heading < -np.pi:
             new_heading += 2 * np.pi
 
         return BoundingBox3D(
             track_id=box.track_id,
             label=box.label,
-            x=new_x, 
-            y=new_y, 
+            x=new_x,
+            y=new_y,
             z=new_z,
             dx=box.dx,  # Dimensions usually don't change
             dy=box.dy,
             dz=box.dz,
-            heading=new_heading
+            heading=new_heading,
         )
-        
+
     @staticmethod
-    def ray_intersects_obb(ray_origin: np.ndarray, ray_dir: np.ndarray, box: 'BoundingBox3D') -> tuple[bool, float]:
+    def ray_intersects_obb(
+        ray_origin: np.ndarray, ray_dir: np.ndarray, box: "BoundingBox3D"
+    ) -> tuple[bool, float]:
         """
         Checks if a 3D ray intersects an Oriented Bounding Box (OBB) using the Slab Method.
         Returns (hit: bool, distance: float).
         """
         center = np.array([box.x, box.y, box.z])
-        
+
         # Create Rotation Matrix for Z-axis yaw (heading)
         cos_h = np.cos(box.heading)
         sin_h = np.sin(box.heading)
-        R = np.array([
-            [cos_h, -sin_h, 0],
-            [sin_h,  cos_h, 0],
-            [0,      0,     1]
-        ])
-        
+        R = np.array([[cos_h, -sin_h, 0], [sin_h, cos_h, 0], [0, 0, 1]])
+
         # Transform the ray to the OBB's local coordinate space
         # (The inverse of a pure rotation matrix is its transpose)
         local_origin = R.T @ (ray_origin - center)
         local_dir = R.T @ ray_dir
-        
+
         # Half dimensions of the box
         half_size = np.array([box.dx / 2.0, box.dy / 2.0, box.dz / 2.0])
         vmin = -half_size
         vmax = half_size
-        
+
         tmin = -np.inf
         tmax = np.inf
-        
+
         # Slab intersection algorithm
         for i in range(3):
             if abs(local_dir[i]) < 1e-6:
@@ -667,19 +672,19 @@ class GeometryUtils:
             else:
                 t1 = (vmin[i] - local_origin[i]) / local_dir[i]
                 t2 = (vmax[i] - local_origin[i]) / local_dir[i]
-                
+
                 if t1 > t2:
                     t1, t2 = t2, t1
-                    
+
                 tmin = max(tmin, t1)
                 tmax = min(tmax, t2)
-                
+
                 if tmin > tmax:
                     return False, -1.0  # Missed the box entirely
-                    
+
         # If tmax < 0, the box is physically behind the camera
         if tmax < 0:
             return False, -1.0
-            
+
         # Hit! Return True and the distance to the hit point
         return True, tmin

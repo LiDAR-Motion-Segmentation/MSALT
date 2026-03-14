@@ -10,11 +10,14 @@ from src.core.tracker import KalmanBoxTracker
 
 logger = logging.getLogger(__name__)
 
+
 class AnnotationManager:
     def __init__(self) -> None:
         # Master storage: Frame Index -> List of Boxes
-        self.annotations: Dict[int, List[BoundingBox3D]] = {} # {frame_idx: [BoundingBox3D, ...]}
-        
+        self.annotations: Dict[
+            int, List[BoundingBox3D]
+        ] = {}  # {frame_idx: [BoundingBox3D, ...]}
+
         # Store paths for saving later
         self.boxes_dir = None
         self.meta_dir = None
@@ -35,7 +38,7 @@ class AnnotationManager:
         # If the added box has an ID >= our current counter, jump ahead.
         if box.track_id >= self._next_id:
             self._next_id = box.track_id + 1
-        
+
         self.annotations[frame_idx].append(box)
         self.annotations[frame_idx].sort(key=lambda b: b.track_id)
 
@@ -84,7 +87,7 @@ class AnnotationManager:
                 "obj_id": str(box.track_id),
                 "source_2d": box.source_2d,  # {'cam_id':..., 'rect':...}
                 "point_indices": indices_list,
-                "visual_overrides": box.visual_overrides
+                "visual_overrides": box.visual_overrides,
             }
             meta_list.append(meta_struct)
 
@@ -150,12 +153,12 @@ class AnnotationManager:
                 if obj_id in meta_data:
                     m = meta_data[obj_id]
                     box.source_2d = m.get("source_2d")
-                    
+
                     if "visual_overrides" in m:
                         box.visual_overrides = m["visual_overrides"]
                     elif "visual_override_2d" in m:
                         box.visual_overrides = m["visual_override_2d"]
-                    
+
                     indices = m.get("point_indices")
                     if indices:
                         box.point_indices = np.array(indices, dtype=int)
@@ -165,14 +168,14 @@ class AnnotationManager:
             if loaded_boxes:
                 self.annotations[frame_idx] = loaded_boxes
                 count += len(loaded_boxes)
-                
+
         # Scan ALL loaded boxes to find the highest ID used so far
         max_id = 0
         for frame_idx, boxes in self.annotations.items():
             for box in boxes:
                 if box.track_id > max_id:
                     max_id = box.track_id
-        
+
         # Ensure new boxes always get a fresh ID after loading
         self._next_id = max_id + 1 if max_id > 0 else 1
 
@@ -185,24 +188,25 @@ class AnnotationManager:
         # Filter out the box with the matching ID
         initial_count = len(self.annotations[frame_idx])
         self.annotations[frame_idx] = [
-            box for box in self.annotations[frame_idx] 
-            if box.track_id != track_id
+            box for box in self.annotations[frame_idx] if box.track_id != track_id
         ]
 
         # Only trigger save if something was actually removed
         if len(self.annotations[frame_idx]) < initial_count:
-            if self.boxes_dir and self.meta_dir:            
+            if self.boxes_dir and self.meta_dir:
                 filename = f"{frame_idx:06d}.json"
-                self.save_frame(frame_idx, self.boxes_dir, self.meta_dir, filename=filename)
+                self.save_frame(
+                    frame_idx, self.boxes_dir, self.meta_dir, filename=filename
+                )
             else:
                 logger.warning("Cannot save deletion: Output directories not set.")
-                
+
     def run_smart_interpolation(
-        self, 
-        track_id: int, 
-        start_frame, 
-        end_frame, 
-        data_controller, 
+        self,
+        track_id: int,
+        start_frame,
+        end_frame,
+        data_controller,
         seg_engine,
         dbscan_eps: float = 0.5,
         dbscan_min_samples: int = 4,
@@ -217,69 +221,75 @@ class AnnotationManager:
         if not current_box:
             logger.warning(f"Track ID {track_id} not found in start frame.")
             return 0
-        
+
         for f_idx in range(start_frame + 1, end_frame + 1):
             frame_data = data_controller.get(f_idx)
             if not frame_data or frame_data.point_cloud is None:
                 break
-            
+
             points = frame_data.point_cloud
             new_box = None
             best_cam_id = None
-            rect_2d = None    
-            
+            rect_2d = None
+
             if frame_data.images:
                 for cam_id, image in frame_data.images.items():
                     calib = data_controller.get_calibration(cam_id)
                     if not calib:
                         continue
-                    
+
                     # project box -> image
                     candidate_rect = GeometryUtils.project_box_to_image(
-                        current_box, calib['extrinsic'], calib['intrinsic'], image.shape
-                    )    
-                
+                        current_box, calib["extrinsic"], calib["intrinsic"], image.shape
+                    )
+
                     if candidate_rect:
                         best_cam_id = cam_id
                         rect_2d = candidate_rect
                         logger.debug(f"Frame {f_idx}: Object found in {cam_id}")
-                        break # Found it!
-                
-            if best_cam_id and rect_2d:        
+                        break  # Found it!
+
+            if best_cam_id and rect_2d:
                 image = frame_data.images[cam_id]
                 calib = data_controller.get_calibration(cam_id)
                 if not calib:
                     logger.warning(f"Frame {f_idx}: No calibration found for {cam_id}")
                     break
-                
-                if not calib: 
+
+                if not calib:
                     break
-            
-               # SAM2 inference
+
+                # SAM2 inference
                 mask = seg_engine.get_mask_from_box(image, rect_2d)
-                
-                if mask is None: 
+
+                if mask is None:
                     logger.warning(f"Frame {f_idx}: SAM returned no mask")
                 else:
-                    uv, valid = GeometryUtils.project_lidar_to_image(points, calib['extrinsic'], calib['intrinsic'])
-                        
-                    if hasattr(mask, 'cpu'): 
+                    uv, valid = GeometryUtils.project_lidar_to_image(
+                        points, calib["extrinsic"], calib["intrinsic"]
+                    )
+
+                    if hasattr(mask, "cpu"):
                         mask = mask.cpu().numpy().astype(bool)
-                    
+
                     # Get points strictly on the object mask
                     h, w = mask.shape[:2]
                     valid_indices = np.where(valid)[0]
                     uv_valid = uv[valid_indices].astype(int)
-                    
-                    in_bounds = (uv_valid[:,0] >= 0) & (uv_valid[:,0] < w) & \
-                                (uv_valid[:,1] >= 0) & (uv_valid[:,1] < h)
-                    
+
+                    in_bounds = (
+                        (uv_valid[:, 0] >= 0)
+                        & (uv_valid[:, 0] < w)
+                        & (uv_valid[:, 1] >= 0)
+                        & (uv_valid[:, 1] < h)
+                    )
+
                     candidate_indices = valid_indices[in_bounds]
                     candidate_uv = uv_valid[in_bounds]
-                    
+
                     on_mask = mask[candidate_uv[:, 1], candidate_uv[:, 0]]
                     object_indices = candidate_indices[on_mask]
-                    
+
                     # Only check length if the mask logic successfully ran
                     if len(object_indices) >= 10:
                         object_points = points[object_indices]
@@ -290,31 +300,41 @@ class AnnotationManager:
                             min_samples=dbscan_min_samples,
                         )
                         if new_box:
-                            logger.info(f"Frame {f_idx}: Tracked via SAM ({best_cam_id})")
+                            logger.info(
+                                f"Frame {f_idx}: Tracked via SAM ({best_cam_id})"
+                            )
                         else:
                             logger.warning(
                                 f"Frame {f_idx}: PCA Fit failed on {len(object_points)} mask points"
-                            ) 
-            
+                            )
+
             # lidar tracking
             if new_box is None:
-                logger.info(f"Frame {f_idx}: Fallback to LiDAR Tracking (Object off-screen)")
+                logger.info(
+                    f"Frame {f_idx}: Fallback to LiDAR Tracking (Object off-screen)"
+                )
                 indices = GeometryUtils.get_points_in_box(points, current_box)
-                
+
                 # Better: Simple distance check if get_points_in_box is strict
                 search_box = deepcopy(current_box)
                 search_box.dx += 1.0
                 search_box.dy += 1.0
-                
-                logger.info(f"Frame {f_idx}: Checking LiDAR points in area {search_box.dx:.2f}x{search_box.dy:.2f}")
+
+                logger.info(
+                    f"Frame {f_idx}: Checking LiDAR points in area {search_box.dx:.2f}x{search_box.dy:.2f}"
+                )
                 indices = GeometryUtils.get_points_in_box(points, search_box)
-                logger.info(f"Frame {f_idx}: Found {len(indices)} points in search region.")
-                
+                logger.info(
+                    f"Frame {f_idx}: Found {len(indices)} points in search region."
+                )
+
                 if len(indices) > 10:
                     cloud_subset = points[indices]
-                    
+
                     # Fit
-                    logger.info(f"Frame {f_idx}: Running PCA Fit on {len(cloud_subset)} points...")
+                    logger.info(
+                        f"Frame {f_idx}: Running PCA Fit on {len(cloud_subset)} points..."
+                    )
                     try:
                         new_box = GeometryUtils.fit_box_with_pca(
                             cloud_subset,
@@ -325,12 +345,16 @@ class AnnotationManager:
                         if new_box:
                             logger.info(f"Frame {f_idx}: LiDAR Fit Successful!")
                         else:
-                            logger.warning(f"Frame {f_idx}: LiDAR Fit returned None (DBSCAN noise?).")
+                            logger.warning(
+                                f"Frame {f_idx}: LiDAR Fit returned None (DBSCAN noise?)."
+                            )
                     except Exception as e:
                         logger.error(f"Frame {f_idx}: PCA Crash: {e}")
                 else:
-                    logger.warning(f"Frame {f_idx}: Too few points ({len(indices)}) to fit box.")
-            
+                    logger.warning(
+                        f"Frame {f_idx}: Too few points ({len(indices)}) to fit box."
+                    )
+
             if new_box:
                 new_box.track_id = track_id
                 self.add_box(f_idx, new_box)
@@ -339,9 +363,9 @@ class AnnotationManager:
             else:
                 logger.warning(f"Frame {f_idx}: Tracking Lost completely.")
                 break
-                
+
         return count
-    
+
     def deselect_all(self):
         """
         Iterates through ALL boxes in ALL frames and sets selected = False.
@@ -349,7 +373,7 @@ class AnnotationManager:
         for frame_idx, boxes in self.annotations.items():
             for box in boxes:
                 box.selected = False
-                
+
     def get_unique_id(self) -> int:
         """
         Returns the next available unique ID and increments the counter.
@@ -359,7 +383,9 @@ class AnnotationManager:
         self._next_id += 1
         return uid
 
-    def run_forward_prediction(self, track_id: int, current_frame_idx: int, horizon: int = 10) -> int:
+    def run_forward_prediction(
+        self, track_id: int, current_frame_idx: int, horizon: int = 10
+    ) -> int:
         """
         Predicts future frames using a Kalman Filter (Constant Velocity).
         Warms up on previous frames to learn velocity.
@@ -368,41 +394,43 @@ class AnnotationManager:
         history_boxes = []
         # We look back up to 5 frames, PLUS the current frame
         for f_idx in range(current_frame_idx - 5, current_frame_idx + 1):
-            if f_idx < 0: 
+            if f_idx < 0:
                 continue
-            
+
             boxes = self.get_boxes(f_idx)
             # Find the box with the matching ID
             box = next((b for b in boxes if b.track_id == track_id), None)
             if box:
                 history_boxes.append(box)
-        
+
         if not history_boxes:
             logger.warning(f"ID {track_id}: No history found to predict velocity.")
             return 0
-            
+
         # Initialize and Warm Up Tracker
         # Start with the oldest known box
         tracker = KalmanBoxTracker(history_boxes[0])
-        
+
         # "Replay" history to converge velocity estimate
         for box in history_boxes[1:]:
-            tracker.predict() # Step forward
-            tracker.update(box) # Correct with known data
-            
+            tracker.predict()  # Step forward
+            tracker.update(box)  # Correct with known data
+
         # Predict Future
         # We use the dimensions/label from the most recent box (current frame)
-        template_box = history_boxes[-1] 
+        template_box = history_boxes[-1]
         count = 0
-        
-        logger.info(f"Predicting ID {track_id} for {horizon} frames using Kalman filter...")
-        
+
+        logger.info(
+            f"Predicting ID {track_id} for {horizon} frames using Kalman filter..."
+        )
+
         for i in range(1, horizon + 1):
             target_frame = current_frame_idx + i
-            
+
             # Predict next step
             pred_box = tracker.predict()
-            
+
             # Construct the final box (combining predicted pos with template dims)
             final_box = BoundingBox3D(
                 track_id=track_id,
@@ -410,26 +438,26 @@ class AnnotationManager:
                 x=pred_box.x,
                 y=pred_box.y,
                 z=pred_box.z,
-                dx=template_box.dx, # Keep dimensions constant
+                dx=template_box.dx,  # Keep dimensions constant
                 dy=template_box.dy,
                 dz=template_box.dz,
-                heading=pred_box.heading
+                heading=pred_box.heading,
             )
-            
+
             # Add to manager (Overwriting if exists)
             self.remove_box(target_frame, track_id)
             self.add_box(target_frame, final_box)
             count += 1
-            
+
         return count
-    
+
     def select_box(self, frame_idx: int, track_id: int, exclusive: bool = True):
         """
         Marks a specific bounding box as selected.
         If exclusive is True, deselects all other boxes in the frame.
         """
         boxes = self.get_boxes(frame_idx)
-        
+
         for box in boxes:
             if box.track_id == track_id:
                 box.selected = True

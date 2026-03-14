@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    # 1. Check out the code
+    # Check out the code
     - uses: actions/checkout@v4
 
-    # 2. Install "uv" (The fast python package manager)
+    # Install "uv" (The fast python package manager)
     - name: Install uv
       uses: astral-sh/setup-uv@v4
       with:
@@ -24,23 +24,30 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         cache-dependency-glob: "**/uv.lock"
 
-    # 3. Install Python
+    # Install Python
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
 
-    # 4. Install Dependencies
+    # Install Dependencies
     # We use --system or sync to install packages
     - name: Install dependencies
       run: |
         uv sync --all-extras --dev
 
-    # 5. Linting (Check for messy code)
+    # Linting (Check for messy code)
     - name: Run Ruff (Linting)
       run: uv run ruff check src/
 
-    # 6. Run Tests
+    # Run pre-commit hooks (ruff + ruff-format)
+    - name: Run pre-commit
+      env:
+        PRE_COMMIT_HOME: .pre-commit-cache
+      run: |
+        uv run pre-commit run --all-files
+
+    # Run Tests
     - name: Run Tests
       uses: GabrielBB/xvfb-action@v1 # Simulates a display
       with:
