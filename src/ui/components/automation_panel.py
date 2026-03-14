@@ -115,7 +115,7 @@ class AutomationPanel(QWidget):
         
         layout.addLayout(size_layout) 
         
-        self.btn_analytics = QPushButton("QA Analytics & Telemetry")
+        self.btn_analytics = QPushButton("QA Analytics and Telemetry")
         self.btn_analytics.setStyleSheet("""
             QPushButton {
                 background-color: #8BC34A; 
