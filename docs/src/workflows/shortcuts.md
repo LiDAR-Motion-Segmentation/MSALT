@@ -21,5 +21,6 @@
 | **Batch View** | `B` | Batch mode of (4x4) set of frames |
 | **Camera Pop-out Modal View** | `Right Click` | Right click on an image window to see a zoomed view |
 | **Box Copy (same frame)** | `Ctrl + D` | Box copied with an offset 1 m in both x and y axis | 
+| **QA Analytics and Telemetry** | `Ctrl + Shift + A` | QA window for analysis |
 
 ![alt text](../../../assets/UI_action.gif)

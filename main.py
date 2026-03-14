@@ -33,7 +33,7 @@ def main(cfg: DictConfig):
 
         if total_frames == 0:
             logger.warning(
-                "Dataset appears empty. Check your paths in conf/msalt_setup/..."
+                "Dataset appears empty. Check your paths in config/msalt_setup/..."
             )
 
     except Exception as e:
@@ -56,7 +56,7 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     if not Path("config").exists():
-        print("CRITICAL ERROR: 'conf' directory not found.")
+        print("CRITICAL ERROR: 'config' directory not found.")
         print("Please run this script from the root of the repository.")
         sys.exit(1)
     main()

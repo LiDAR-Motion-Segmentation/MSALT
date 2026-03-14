@@ -26,6 +26,7 @@ This panel houses your 1 click AI pipelines.
 * **Kalman Filter Tracking (K):** Uses a velocity based linear Kalman Filter to predict an object's future trajectory.
 * **Auto-Annotate (YOLO+SAM2):** The primary macro. Runs YOLO detection across all cameras, generates SAM2 masks, and instantly back-projects them into the 3D point cloud.
 * **Batch View (B):** Opens a grid window to inspect a specific track ID across multiple frames simultaneously.
+* **QA Analytics and Telemetry:** Opens a window with graphs for completeness, class distribution, consistency and validity 
 
 ### 4. Right Panel: Annotations & Inspector
 This dual-purpose dock gives you granular control over your data.

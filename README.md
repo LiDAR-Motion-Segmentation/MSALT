@@ -21,6 +21,8 @@ MSALT is a high-performance, open-source annotation tool designed for sensor fus
 
 ## Installation
 - You can setup the tool `locally` or using `Docker(Devcontainer)` setup whose intructions are mentioned towards the end of this `readme.md` file
+- I would suggest to first try the `Docker(Devcontainer)` approach as they are configured with the example data and should work straight out of the box with minimal setup, remeber to check the setup paths.
+
 ```python3
 # MSALT uses uv for blazing fast dependency management.
 git clone https://github.com/LiDAR-Motion-Segmentation/MSALT.git
@@ -68,6 +70,7 @@ uv run main.py
 | **Batch View** | `B` | Batch mode of (4x4) set of frames |
 | **Camera Pop-out Modal View** | `Right Click` | Right click on an image window to see a zoomed view|
 | **Box Copy (same frame)** | `Ctrl + D` | Box copied with an offset 1 m in both x and y axis | 
+| **QA Analytics and Telemetry** | `Ctrl + Shift + A` | QA window for analysis |
 
 ![alt text](./assets/UI_action.gif)
 
@@ -153,7 +156,7 @@ defaults:
 -0.4230164581873918
 0.4368759758405062
 -0.5685466143578862
-0.5540317726793159s
+0.5540317726793159
 ```
 - for `distortion` ensure that your text file structure looks like this
 ```
@@ -413,7 +416,7 @@ defaults:
 output_dir: "/MSALT_outputs_annotations_nuscenes/"                   
 data_root: "/home/Downloads/v10-mini"                                       
 scene_id: 1                                           
-num_frames: 5                                        
+num_frames: 10                                        
 iou_threshold: 0.3   # IoU > 0.3 counts as True Positive
 
 # Class Mapping (Grouping diverse labels into Report Categories)
@@ -470,7 +473,13 @@ AVERAGE / TOTAL | 158        | 1557         | 1345         | 1.56
 ### Docs
 - used mdbooks to generate the docs
 - read it to get more details about the project
+- run the docs locally not in the devcontainer
+
 ```
+# install rust (ubuntu 22.04)  
+curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
+cargo install mdbook
+
 # to open the docs in a new browser
 cd docs/
 mdbook serve --open
@@ -481,7 +490,6 @@ mdbook build
 
 
 ## Acknowledgement
-- I would like to thank my advisor [Dr. K. Madhava Krishna](https://madhavak-iiith.github.io/), IIIT Hyderabad for guiding me through this project and also my collaborators for advice
 - I have taken a lot of ideas from [SALT](https://github.com/anuragxel/salt) , [SUSTechpoints](https://github.com/naurril/SUSTechPOINTS), [SematicKITTI_LABLER](https://github.com/jbehley/point_labeler) open source tools.
 
 ## Citation
