@@ -156,7 +156,7 @@ defaults:
 -0.4230164581873918
 0.4368759758405062
 -0.5685466143578862
-0.5540317726793159s
+0.5540317726793159
 ```
 - for `distortion` ensure that your text file structure looks like this
 ```
