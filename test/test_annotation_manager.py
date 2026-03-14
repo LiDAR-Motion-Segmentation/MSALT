@@ -1,4 +1,3 @@
-
 from src.core.annotation_manager import AnnotationManager
 from src.core.objects import BoundingBox3D
 
@@ -83,4 +82,3 @@ def test_deselect_all_clears_selected_flag_across_frames():
     for frame_idx in [0, 1]:
         for box in manager.get_boxes(frame_idx):
             assert not box.selected
-

@@ -102,7 +102,7 @@ def test_camera_strip_box_signal_includes_shift_override(qapp, monkeypatch):
         "src.ui.components.camera_view.QApplication",
         MockQApplication,
     )
-    
+
     widget._on_box_drawn("CAM_FRONT", 1, 2, 3, 4)
 
     assert emissions == [("CAM_FRONT", 1, 2, 3, 4, True)]

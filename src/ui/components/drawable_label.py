@@ -7,6 +7,7 @@ from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
+
 class DrawableLabel(QLabel):
     """
     A QLabel that allows the user to click and drag to draw a box.
@@ -15,10 +16,10 @@ class DrawableLabel(QLabel):
 
     # Signal: (x, y, w, h) in original image coordinates
     selection_finished = pyqtSignal(int, int, int, int)
-    
+
     # Emit the camera_id when double-clicked
     right_clicked = pyqtSignal(str)
-    
+
     # Add this near the top of the class
     hovered = pyqtSignal(int, int)
 
@@ -37,13 +38,13 @@ class DrawableLabel(QLabel):
 
         # List of [x, y, w, h] in ORIGINAL coordinates
         self.static_rects = []
-        
+
         # Live Projection Data
         self.current_boxes_3d = []
         self.intrinsic = None
         self.extrinsic = None
         self.camera_id = None
-        
+
         # Default Map (Green Fallback)
         self.label_color_map = {}
         self.setMouseTracking(True)
@@ -60,7 +61,7 @@ class DrawableLabel(QLabel):
         self.intrinsic = intrinsic
         self.extrinsic = extrinsic
         self.update()  # Trigger repaint
-    
+
     def set_static_rects(self, rects_data):
         """
         Receives list of dicts: [{'rect': [x,y,w,h], 'id': 1, 'label': 'person'}, ...]
@@ -70,16 +71,16 @@ class DrawableLabel(QLabel):
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         # If dragging to draw a box, do the normal box logic
-        if event.buttons() & Qt.MouseButton.LeftButton:   
+        if event.buttons() & Qt.MouseButton.LeftButton:
             if self.is_drawing and self.start_point:
                 current_pos = event.position().toPoint()
                 self.current_rect = QRect(self.start_point, current_pos).normalized()
                 self.update()
-                
+
         # If just hovering with no buttons pressed, emit the coordinates
         elif event.buttons() == Qt.MouseButton.NoButton:
             self.hovered.emit(event.pos().x(), event.pos().y())
-            
+
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
@@ -91,7 +92,6 @@ class DrawableLabel(QLabel):
 
             # Convert to Original Image Coordinates
             if self.pixmap() and screen_rect and not screen_rect.isEmpty():
-                
                 # Ignore tiny 1-5 pixel boxes caused by hand-shake during double-clicks
                 if screen_rect.width() > 5 and screen_rect.height() > 5:
                     # Calculate scale to map back to original image resolution
@@ -118,10 +118,10 @@ class DrawableLabel(QLabel):
             # Clear visual box after release
             self.current_rect = None
             self.update()
-            
+
     def set_camera_id(self, cam_id: str):
         self.camera_id = cam_id
-        
+
     def set_label_colors(self, label_config: List[Dict]):
         """
         Populate the color lookup dictionary.
@@ -137,11 +137,11 @@ class DrawableLabel(QLabel):
     def paintEvent(self, event):
         # draw the image
         super().paintEvent(event)
-        
+
         # If no calibration, we can't project
         if self.intrinsic is None or self.extrinsic is None:
             return
-        
+
         painter = QPainter(self)
 
         # Setup Font
@@ -156,21 +156,24 @@ class DrawableLabel(QLabel):
         for box in self.current_boxes_3d:
             rect_2d = None
             is_manual_override = False
-            
+
             overrides = getattr(box, "visual_overrides", {})
-            
+
             if self.camera_id and self.camera_id in overrides:
                 rect_2d = overrides[self.camera_id]
                 is_manual_override = True
             else:
                 # Use standard 3D projection for all other cameras
                 rect_2d = GeometryUtils.project_box_to_image(
-                    box, self.extrinsic, self.intrinsic, (self.orig_height, self.orig_width)
+                    box,
+                    self.extrinsic,
+                    self.intrinsic,
+                    (self.orig_height, self.orig_width),
                 )
-            
+
             if not rect_2d:
                 continue
-            
+
             rx, ry, rw, rh = rect_2d
 
             # Scale back to screen coords
@@ -178,10 +181,10 @@ class DrawableLabel(QLabel):
             sy = int(ry * scale_y)
             sw = int(rw * scale_x)
             sh = int(rh * scale_y)
-            
+
             # Define Color
             if box.selected:
-                color = QColor(255, 255, 0) # Yellow
+                color = QColor(255, 255, 0)  # Yellow
             else:
                 # Dynamic Lookup
                 color = self.label_color_map.get(box.label, QColor(0, 255, 0))
@@ -189,16 +192,16 @@ class DrawableLabel(QLabel):
             # Draw Box
             pen = QPen(color, 2)
             if is_manual_override:
-                 # Visual cue: line implies "Manual Edit"
-                 pen.setStyle(Qt.PenStyle.SolidLine)
-                 
+                # Visual cue: line implies "Manual Edit"
+                pen.setStyle(Qt.PenStyle.SolidLine)
+
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(sx, sy, sw, sh)
 
             # Draw label
             label_text = f"{box.track_id}: {box.label}"
-            
+
             # Draw text overlay
             text_w = fm.horizontalAdvance(label_text) + 10
             text_h = fm.height() + 4
@@ -219,7 +222,7 @@ class DrawableLabel(QLabel):
             painter.setPen(pen)
             painter.setBrush(QColor(0, 255, 0, 50))
             painter.drawRect(self.current_rect)
-        
+
     def mousePressEvent(self, event: QMouseEvent) -> None:
         # Left Click: Start Drawing
         if event.button() == Qt.MouseButton.LeftButton:
@@ -227,40 +230,52 @@ class DrawableLabel(QLabel):
             self.start_point = event.position().toPoint()
             self.current_rect = QRect(self.start_point, self.start_point)
             self.update()
-            
+
         # Right Click: Open Modal
         elif event.button() == Qt.MouseButton.RightButton:
             if self.camera_id:
                 self.right_clicked.emit(self.camera_id)
-        
+
     def get_2d_projections(self):
         """Returns the currently projected 2D boxes in raw image coordinates."""
         if self.intrinsic is None or self.extrinsic is None:
             return []
-        
+
         projections = []
         for box in self.current_boxes_3d:
             overrides = getattr(box, "visual_overrides", {})
             is_manual_override = False
-            
+
             if self.camera_id and self.camera_id in overrides:
                 rect_2d = overrides[self.camera_id]
                 is_manual_override = True
             else:
                 rect_2d = GeometryUtils.project_box_to_image(
-                    box, self.extrinsic, self.intrinsic, (self.orig_height, self.orig_width)
+                    box,
+                    self.extrinsic,
+                    self.intrinsic,
+                    (self.orig_height, self.orig_width),
                 )
-                
+
             if not rect_2d:
                 continue
-                
+
             rx, ry, rw, rh = rect_2d
-            color = QColor(255, 255, 0) if box.selected else self.label_color_map.get(box.label, QColor(0, 255, 0))
-                
-            projections.append({
-                'x': rx, 'y': ry, 'w': rw, 'h': rh,
-                'label': f"{box.track_id}: {box.label}",
-                'color': color,
-                'is_override': is_manual_override
-            })
+            color = (
+                QColor(255, 255, 0)
+                if box.selected
+                else self.label_color_map.get(box.label, QColor(0, 255, 0))
+            )
+
+            projections.append(
+                {
+                    "x": rx,
+                    "y": ry,
+                    "w": rw,
+                    "h": rh,
+                    "label": f"{box.track_id}: {box.label}",
+                    "color": color,
+                    "is_override": is_manual_override,
+                }
+            )
         return projections

@@ -140,4 +140,3 @@ def test_modify_box_command_execute_undo_and_redo():
     boxes_redo = manager.get_boxes(frame)
     assert len(boxes_redo) == 1
     assert boxes_redo[0] == cmd.new_state
-

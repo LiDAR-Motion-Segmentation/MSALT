@@ -11,6 +11,7 @@ from PyQt6.QtCore import pyqtSignal
 from src.core.objects import BoundingBox3D
 from typing import List, Dict
 
+
 class InspectorWidget(QWidget):
     box_changed = pyqtSignal(BoundingBox3D)
 
@@ -41,15 +42,15 @@ class InspectorWidget(QWidget):
         self.spin_id.valueChanged.connect(self._on_change)
 
         self.combo_cls = QComboBox()
-        
+
         # Extract names from the config list [{'name': 'car', ...}, ...]
         if self.label_config:
-            label_names = [item['name'] for item in self.label_config]
+            label_names = [item["name"] for item in self.label_config]
             self.combo_cls.addItems(label_names)
         else:
             # Fallback if config is missing
-            self.combo_cls.addItems([ "unkown"])
-            
+            self.combo_cls.addItems(["unkown"])
+
         self.combo_cls.currentTextChanged.connect(self._on_change)
 
         form_id.addRow("Track ID:", self.spin_id)

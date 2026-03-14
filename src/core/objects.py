@@ -25,44 +25,52 @@ class BoundingBox3D:
 
     source_2d: Optional[Dict] = None
     visual_overrides: Dict[str, List[int]] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict:
         data = {
             "track_id": self.track_id,
             "label": self.label,
             "confidence": self.confidence,
-            "x": self.x, "y": self.y, "z": self.z,
-            "dx": self.dx, "dy": self.dy, "dz": self.dz,
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
+            "dx": self.dx,
+            "dy": self.dy,
+            "dz": self.dz,
             "heading": self.heading,
         }
         # Only save if it exists to keep JSON clean
         if self.visual_overrides:
             data["visual_override_2d"] = self.visual_overrides
-            
+
         if self.source_2d:
             data["source_2d"] = self.source_2d
-            
+
         return data
-    
+
     @classmethod
     def from_dict(cls, data: Dict):
         box = cls(
-            x=data["x"], y=data["y"], z=data["z"],
-            dx=data["dx"], dy=data["dy"], dz=data["dz"],
+            x=data["x"],
+            y=data["y"],
+            z=data["z"],
+            dx=data["dx"],
+            dy=data["dy"],
+            dz=data["dz"],
             heading=data["heading"],
             label=data.get("label", "Unknown"),
             track_id=data.get("track_id", -1),
-            confidence=data.get("confidence", 1.0)
+            confidence=data.get("confidence", 1.0),
         )
         # Load overrides if they exist
         if "visual_overrides" in data:
             box.visual_overrides = data["visual_override_2d"]
         elif "visual_override_2d" in data:
             box.visual_overrides = data["visual_override_2d"]
-            
+
         if "source_2d" in data:
             box.source_2d = data["source_2d"]
-            
+
         return box
 
     def get_corners(self) -> np.ndarray:
@@ -102,29 +110,29 @@ class BoundingBox3D:
         """
         if not isinstance(other, BoundingBox3D):
             return False
-        
+
         scalars_match = (
-            self.track_id == other.track_id and
-            self.label == other.label and
-            np.isclose(self.x, other.x) and
-            np.isclose(self.y, other.y) and
-            np.isclose(self.z, other.z) and
-            np.isclose(self.dx, other.dx) and
-            np.isclose(self.dy, other.dy) and
-            np.isclose(self.dz, other.dz) and
-            np.isclose(self.heading, other.heading)
+            self.track_id == other.track_id
+            and self.label == other.label
+            and np.isclose(self.x, other.x)
+            and np.isclose(self.y, other.y)
+            and np.isclose(self.z, other.z)
+            and np.isclose(self.dx, other.dx)
+            and np.isclose(self.dy, other.dy)
+            and np.isclose(self.dz, other.dz)
+            and np.isclose(self.heading, other.heading)
         )
-        
+
         if not scalars_match:
             return False
-        
+
         # Check overrides equality
         if self.visual_overrides != other.visual_overrides:
             return False
-        
+
         if self.point_indices is None and other.point_indices is None:
             return True
         if self.point_indices is None or other.point_indices is None:
             return False
-            
+
         return np.array_equal(self.point_indices, other.point_indices)

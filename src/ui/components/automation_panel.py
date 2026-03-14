@@ -1,4 +1,11 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QSpinBox, QHBoxLayout
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QPushButton,
+    QLabel,
+    QSpinBox,
+    QHBoxLayout,
+)
 from PyQt6.QtCore import pyqtSignal, Qt
 
 
@@ -48,9 +55,11 @@ class AutomationPanel(QWidget):
 
         # interpolate button
         self.btn_interp = QPushButton("SAM2 Interpolation (I)")
-        self.btn_interp.setToolTip("Linearly fill gaps between previous frame and this one")
+        self.btn_interp.setToolTip(
+            "Linearly fill gaps between previous frame and this one"
+        )
         self.btn_interp.clicked.connect(self.interpolate_requested.emit)
-        
+
         self.btn_interp.setStyleSheet("""
             QPushButton {
                 background-color: #FFFFFF;
@@ -82,7 +91,7 @@ class AutomationPanel(QWidget):
         """)
         self.btn_linear.clicked.connect(self.tracking_requested.emit)
         layout.addWidget(self.btn_linear)
-        
+
         self.btn_yolo = QPushButton("Auto-Annotate (YOLO+SAM2)")
         self.btn_yolo.setToolTip("Run YOLO detection and project 3D boxes")
         self.btn_yolo.clicked.connect(self.yolo_requested.emit)
@@ -100,21 +109,21 @@ class AutomationPanel(QWidget):
 
         layout.addStretch()
         self.setLayout(layout)
-        
+
         size_layout = QHBoxLayout()
         lbl_size = QLabel("PCD Point Size:")
         lbl_size.setStyleSheet("color: #AAA;")
-        
+
         self.spin_point_size = QSpinBox()
-        self.spin_point_size.setRange(1, 10) # Limit between 1 and 10 pixels
-        self.spin_point_size.setValue(2)     # Default size
+        self.spin_point_size.setRange(1, 10)  # Limit between 1 and 10 pixels
+        self.spin_point_size.setValue(2)  # Default size
         self.spin_point_size.valueChanged.connect(self.point_size_changed.emit)
-        
+
         size_layout.addWidget(lbl_size)
         size_layout.addWidget(self.spin_point_size)
-        
-        layout.addLayout(size_layout) 
-        
+
+        layout.addLayout(size_layout)
+
         self.btn_analytics = QPushButton("QA Analytics and Telemetry")
         self.btn_analytics.setStyleSheet("""
             QPushButton {
@@ -129,9 +138,9 @@ class AutomationPanel(QWidget):
             }
         """)
         self.btn_analytics.clicked.connect(self.open_analytics_requested.emit)
-        
+
         layout.addWidget(self.btn_analytics)
-        
+
         self.btn_grid = QPushButton("Batch View (B)")
         self.btn_grid.clicked.connect(self.grid_view_requested.emit)
         self.btn_grid.setStyleSheet("""
@@ -154,7 +163,7 @@ class AutomationPanel(QWidget):
     def on_frame_update(self, data):
         """
         Required by MainWindow plugin system.
-        The automation panel doesn't need to update visuals per frame, 
+        The automation panel doesn't need to update visuals per frame,
         so we leave this empty.
         """
         pass
