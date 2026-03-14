@@ -31,7 +31,7 @@ Because the LiDAR is mounted on the roof of the ego-vehicle, it often captures r
 - If the point cloud is too sparse (fewer than 5 points), the system falls back to a mathematical raycast, placing a standard-sized box at the correct depth on the ground plane.
 
 6. `3D Spatial Deduplication (Bird's-Eye NMS)`
-- Because multiple cameras have overlapping fields of view (e.g., CAM_FRONT and CAM_FRONT_RIGHT), the same physical object might be detected twice.
+- Because multiple cameras have overlapping fields of view, the same physical object might be detected twice.
 - Before saving a new 3D box, MSALT performs a spatial check against all existing boxes in the frame. It calculates the 2D Euclidean distance in the Bird's-Eye View (X, Y plane). If the new box is within 0.8 meters of an existing box, it is classified as a cross-camera duplicate and discarded.
 
 ## Configuration
