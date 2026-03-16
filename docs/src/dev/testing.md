@@ -7,6 +7,9 @@ uv run ruff check . --fix
 
 # Run the test suite
 uv run pytest 
+
+# pre-commit testing
+uv run pre-commit run --all-files
 ```
 
 ### annotation_manager tests (`test_annotation_manager.py`)
