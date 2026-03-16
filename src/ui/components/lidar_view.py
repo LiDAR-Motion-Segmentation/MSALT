@@ -383,6 +383,7 @@ class CustomGLWidget(gl.GLViewWidget):
         painter.setPen(QColor(255, 0, 255))
         painter.end()
 
+
 class LidarVisualizer(BasePluginWidget):
     box_selected_3d = pyqtSignal(int, bool)
 
