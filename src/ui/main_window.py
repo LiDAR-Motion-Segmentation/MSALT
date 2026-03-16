@@ -861,11 +861,16 @@ class MainWindow(QMainWindow):
                 f"Kalman predicted {total_filled} frames.", 3000
             )
 
-    def select_box_from_3d(self, track_id: int):
-        """Handler for when a box is clicked directly in the 3D view."""
-        # Tell the manager to exclusively select this ID
+    def select_box_from_3d(self, track_id: int, multi_select: bool = False):
+        """Handler for when a box is clicked directly in the 3D view.
+
+        If multi_select is True (Alt+Click in the 3D view), the clicked box is
+        added to the current selection without clearing previously selected boxes.
+        Otherwise, selection is exclusive.
+        """
+        # Update selection state via the manager
         self.annotation_manager.select_box(
-            self.current_frame_idx, track_id, exclusive=True
+            self.current_frame_idx, track_id, exclusive=not multi_select
         )
 
         # Find the actual BoundingBox3D object for this track_id
@@ -873,12 +878,14 @@ class MainWindow(QMainWindow):
         selected_box = next((b for b in current_boxes if b.track_id == track_id), None)
 
         if selected_box:
-            # Trigger your existing handler to update the Inspector panel
-            # (Passing the OBJECT now, not the integer)
-            self.on_box_selected(selected_box)
+            if multi_select:
+                # For group selection, keep existing selections and just update the inspector
+                self.inspector.set_box(selected_box)
+                self.refresh_views_only()
+            else:
+                # Single selection path reuses the existing handler
+                self.on_box_selected(selected_box)
 
-            # Visually update the UI list
-            self.refresh_views_only()
             self.statusBar().showMessage(f"Selected Box ID: {track_id}", 2000)
 
     def run_yolo_pipeline(self):
