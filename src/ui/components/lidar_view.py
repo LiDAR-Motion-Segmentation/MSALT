@@ -383,27 +383,9 @@ class CustomGLWidget(gl.GLViewWidget):
         painter.setPen(QColor(255, 0, 255))
         painter.end()
 
-    def update_laser_pointer(self, origin, direction, hit_point=None):
-        if origin is None or direction is None:
-            self.laser_ray.setVisible(False)
-            self.laser_hit.setVisible(False)
-            return
-
-        # Draw a 100m long line originating from the camera lens
-        end_pt = origin + (direction * 100.0)
-        self.laser_ray.setData(pos=np.vstack([origin, end_pt]))
-        self.laser_ray.setVisible(True)
-
-        # Snap a giant red dot to the closest physical point
-        if hit_point is not None:
-            self.laser_hit.setData(pos=np.array([hit_point]))
-            self.laser_hit.setVisible(True)
-        else:
-            self.laser_hit.setVisible(False)
-
 
 class LidarVisualizer(BasePluginWidget):
-    box_selected_3d = pyqtSignal(int)
+    box_selected_3d = pyqtSignal(int, bool)
 
     def __init__(self, parent=None, cfg=None):
         super().__init__(parent)
@@ -605,7 +587,7 @@ class LidarVisualizer(BasePluginWidget):
         # Ensure the camera pan/rotate still works natively
         self._original_mouse_release(ev)
 
-        # Only trigger selection on Left Click (Modify to Shift+Click if you prefer)
+        # Only trigger selection on Left Click
         if ev.button() != Qt.MouseButton.LeftButton:
             return
 
@@ -649,9 +631,11 @@ class LidarVisualizer(BasePluginWidget):
                 min_dist = dist
                 closest_hit_id = box.track_id
 
-        # Emit the selected ID to the main window
+        # Emit the selected ID to the main window.
+        # multi_select is True when Alt is held during the click.
         if closest_hit_id != -1:
-            self.box_selected_3d.emit(closest_hit_id)
+            multi_select = bool(ev.modifiers() & Qt.KeyboardModifier.AltModifier)
+            self.box_selected_3d.emit(closest_hit_id, multi_select)
 
     def update_laser_pointer(self, origin, direction, hit_point=None):
         if (

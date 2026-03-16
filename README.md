@@ -41,7 +41,7 @@ chmod +x msalt
 # or use to run with uv
 uv run main.py
 ```
-![alt text](./assets/ui_v13.png)
+![alt text](./assets/ui_v14.png)
 
 ## Model weights
 - Download the SAM 2 checkpoints and place them in the directory.
@@ -71,6 +71,7 @@ uv run main.py
 | **Camera Pop-out Modal View** | `Right Click` | Right click on an image window to see a zoomed view|
 | **Box Copy (same frame)** | `Ctrl + D` | Box copied with an offset 1 m in both x and y axis | 
 | **QA Analytics and Telemetry** | `Ctrl + Shift + A` | QA window for analysis |
+| **Group Propagation** | `Ctrl + Shift + G` | Propagate a group of boxes after selecting multiple boxes using alt+ left click |
 
 ![alt text](./assets/UI_action.gif)
 
@@ -257,6 +258,9 @@ uv run ruff check . --fix
 
 # Run the test suite
 uv run pytest 
+
+# pre-commit testing
+uv run pre-commit run --all-files
 ```
 
 ## Docker (Devcontainer)
