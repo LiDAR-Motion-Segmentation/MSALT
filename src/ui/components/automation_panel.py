@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QSpinBox,
     QHBoxLayout,
+    QFileDialog,
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 
@@ -17,6 +18,7 @@ class AutomationPanel(QWidget):
     yolo_requested = pyqtSignal()
     point_size_changed = pyqtSignal(int)
     open_analytics_requested = pyqtSignal()
+    export_segmentation_requested = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -107,6 +109,20 @@ class AutomationPanel(QWidget):
         """)
         layout.addWidget(self.btn_yolo)
 
+        self.btn_export_seg = QPushButton("Export 3D Segmentation (.label)")
+        self.btn_export_seg.setStyleSheet("""
+            QPushButton {
+                background-color: #9C27B0; /* A nice purple for Deep Tech features */
+                color: white; 
+                font-weight: bold; 
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #BA68C8; }
+        """)
+        self.btn_export_seg.clicked.connect(self._on_export_seg_clicked)
+        layout.addWidget(self.btn_export_seg)
+
         layout.addStretch()
         self.setLayout(layout)
 
@@ -167,3 +183,11 @@ class AutomationPanel(QWidget):
         so we leave this empty.
         """
         pass
+
+    def _on_export_seg_clicked(self):
+        """Opens a dialog to pick a folder, then emits the path."""
+        dir_path = QFileDialog.getExistingDirectory(
+            self, "Select Export Directory for .label files"
+        )
+        if dir_path:  # If the user didn't hit cancel
+            self.export_segmentation_requested.emit(dir_path)
