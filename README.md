@@ -41,7 +41,7 @@ chmod +x msalt
 # or use to run with uv
 uv run main.py
 ```
-![alt text](./assets/ui_v14.png)
+![alt text](./assets/ui_v15.png)
 
 ## Model weights
 - Download the SAM 2 checkpoints and place them in the directory.
@@ -172,6 +172,7 @@ defaults:
 - in the `config.yaml` you can put your custom path for saving the annotations in which 3d folder will contain the annotations in json format
 - in the `labels` section in the `config.yaml` you can store the type of the classes that you want along with the colour coding for 2D boxes and the points inside the 3D bounding box.
 - the ones below are the most common classes in autonomous driving datasets, the naming conventions can be a subject to change.
+- also we provide an option for exporting 3D segmentation labels, ensure that you give a unique number mapping as per your choice
 
 ```
 output:
@@ -237,6 +238,14 @@ labels:
   - name: "static_other_vehicle"
     color: [75, 0, 130]       # Indigo (Very Dark Purple)
     hotkey: "15"
+
+export:
+  segmentation_mapping:
+    unknown: 3
+    moving_people: 1
+    static_people: 2
+    moving_car: 5
+    static_car: 4
 ```
 
 

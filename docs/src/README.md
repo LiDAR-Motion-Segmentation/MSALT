@@ -41,7 +41,7 @@ chmod +x msalt
 # or use to run with uv
 uv run main.py
 ```
-![alt text](./assets/ui_v14.png)
+![alt text](./assets/ui_v15.png)
 
 ## Model weights
 - Download the SAM 2 checkpoints and place them in the directory.

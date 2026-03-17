@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import List
 
 import numpy as np
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence, QShortcut
-from PyQt6.QtWidgets import QApplication, QDockWidget, QMainWindow
+from PyQt6.QtWidgets import QApplication, QDockWidget, QMainWindow, QProgressDialog
 
 from src.core.annotation_manager import AnnotationManager
 from src.core.commands import AddBoxCommand, BulkDeleteCommand, CommandHistory
@@ -26,6 +26,49 @@ from src.ui.interfaces import BasePluginWidget
 from src.ui.playback_widget import PlaybackWidget
 
 logger = logging.getLogger(__name__)
+
+
+class SegExportWorker(QThread):
+    """Runs the heavy SAM2 segmentation export in the background."""
+
+    progress_updated = pyqtSignal(int, int)  # current, total
+    finished_success = pyqtSignal(str)
+    finished_error = pyqtSignal(str)
+
+    def __init__(
+        self,
+        annotation_manager,
+        start,
+        end,
+        data_ctrl,
+        seg_engine,
+        export_dir,
+        class_to_id,
+    ):
+        super().__init__()
+        self.annotation_manager = annotation_manager
+        self.start_frame = start
+        self.end_frame = end
+        self.data_ctrl = data_ctrl
+        self.seg_engine = seg_engine
+        self.export_dir = export_dir
+        self.class_to_id = class_to_id
+
+    def run(self):
+        try:
+            # Pass our signal's emit method as the callback!
+            self.annotation_manager.export_sam2_segmentation(
+                start_frame=self.start_frame,
+                end_frame=self.end_frame,
+                data_controller=self.data_ctrl,
+                seg_engine=self.seg_engine,
+                export_dir=self.export_dir,
+                class_to_id=self.class_to_id,
+                progress_callback=self.progress_updated.emit,
+            )
+            self.finished_success.emit(f"Exported to {self.export_dir}")
+        except Exception as e:
+            self.finished_error.emit(str(e))
 
 
 class MainWindow(QMainWindow):
@@ -126,6 +169,9 @@ class MainWindow(QMainWindow):
         self.batch_grid_window.request_jump.connect(self.load_frame)
         self.batch_grid_window.data_modified.connect(self.save_specific_frame)
         self.automation_panel.grid_view_requested.connect(self.open_grid_view)
+        self.automation_panel.export_segmentation_requested.connect(
+            self._execute_segmentation_export
+        )
 
         # Save (Ctrl+S)
         save_action = QAction("Save Annotations", self)
@@ -1139,3 +1185,62 @@ class MainWindow(QMainWindow):
 
             self.load_frame(target_frame)
             self.playback.slider.setValue(target_frame)
+
+    def _execute_segmentation_export(self, export_dir_path: str):
+        try:
+            mapping_cfg = self.cfg.export.segmentation_mapping
+            class_to_id = {str(k): int(v) for k, v in mapping_cfg.items()}
+        except Exception:
+            if hasattr(self, "statusBar"):
+                self.statusBar().showMessage(
+                    "Error: Missing 'segmentation_mapping' in config.yaml", 5000
+                )
+            return
+
+        start_frame = 0
+        end_frame = self.data_controller.get_total_frames() - 1
+        total = end_frame - start_frame + 1
+
+        if total <= 0:
+            return
+
+        # Setup the Progress Dialog (Locks the main window)
+        self.progress_dialog = QProgressDialog(
+            "Running SAM2 3D Segmentation...", "Cancel", 0, total, self
+        )
+        self.progress_dialog.setWindowTitle("Deep Tech Export")
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progress_dialog.setAutoClose(True)
+        self.progress_dialog.setAutoReset(True)
+        self.progress_dialog.setValue(0)
+        self.progress_dialog.show()
+
+        # Spin up the Background Thread
+        self.export_worker = SegExportWorker(
+            self.annotation_manager,
+            start_frame,
+            end_frame,
+            self.data_controller,
+            self.seg_engine,
+            Path(export_dir_path),
+            class_to_id,
+        )
+
+        # Connect Signals
+        self.export_worker.progress_updated.connect(self.progress_dialog.setValue)
+        self.export_worker.finished_success.connect(self._on_export_success)
+        self.export_worker.finished_error.connect(self._on_export_error)
+
+        # Allow user to abort
+        self.progress_dialog.canceled.connect(self.export_worker.terminate)
+
+        # START THE THREAD
+        self.export_worker.start()
+
+    def _on_export_success(self, msg: str):
+        if hasattr(self, "statusBar"):
+            self.statusBar().showMessage(f"Export Sucess: {msg}", 5000)
+
+    def _on_export_error(self, err: str):
+        if hasattr(self, "statusBar"):
+            self.statusBar().showMessage(f"Export Failed: {err}", 10000)
