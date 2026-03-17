@@ -1,3 +1,4 @@
+import torch
 from typing import Dict, List
 from src.core.objects import BoundingBox3D
 import json
@@ -463,3 +464,123 @@ class AnnotationManager:
                 box.selected = True
             elif exclusive:
                 box.selected = False
+
+    def export_sam2_segmentation(
+        self,
+        start_frame,
+        end_frame,
+        data_controller,
+        seg_engine,
+        export_dir: Path,
+        class_to_id: Dict[str, int],
+        progress_callback=None,
+    ):
+        """
+        Exports highly accurate point-wise semantic and instance labels using SAM2.
+        Saves as standard 32-bit binary .label files.
+        """
+        export_dir.mkdir(parents=True, exist_ok=True)
+        total_frames = (end_frame - start_frame) + 1
+        logger.info("Starting SAM2 Point-Cloud Segmentation Export...")
+
+        with torch.no_grad():
+            for i, f_index in enumerate(range(start_frame, end_frame + 1)):
+                if progress_callback:
+                    progress_callback(i + 1, total_frames)
+
+                frame_data = data_controller.get(f_index)
+                if not frame_data or frame_data.point_cloud is None:
+                    continue
+
+                points = frame_data.point_cloud
+                num_points = points.shape[0]
+
+                # Initialize 32-bit integer array (0 = background/unlabeled)
+                # Standard format: Lower 16 bits = Semantic Class, Upper 16 bits = Instance ID
+                point_labels = np.zeros(num_points, dtype=np.uint32)
+
+                boxes = self.get_boxes(f_index)
+
+                for box in boxes:
+                    # encode labels
+                    semantic_id = class_to_id.get(
+                        box.label, 1
+                    )  # default to 1 if unkown
+                    instance_id = box.track_id
+                    encoded_label = (instance_id << 16) | (semantic_id & 0xFFFF)
+
+                    best_cam_id = None
+                    rect_2d = None
+
+                    if frame_data.images:
+                        for cam_id, image in frame_data.images.items():
+                            calib = data_controller.get_calibration(cam_id)
+                            if not calib:
+                                continue
+
+                            candidate_rect = GeometryUtils.project_box_to_image(
+                                box, calib["extrinsic"], calib["intrinsic"], image.shape
+                            )
+                            if candidate_rect:
+                                best_cam_id = cam_id
+                                rect_2d = candidate_rect
+                                break
+
+                    # apply 3D filter to prevent baground bleeding
+                    box_indices = GeometryUtils.get_points_in_box(points, box)
+
+                    # empty box found move on
+                    if len(box_indices) == 0:
+                        continue
+
+                    # if no camera sees it, fallback to Level 1 (Naive Box Group)
+                    if not best_cam_id or not rect_2d:
+                        point_labels[box_indices] = encoded_label
+                        continue
+
+                    # SAM2 Mask generation
+                    image = frame_data.images[best_cam_id]
+                    calib = data_controller.get_calibration(best_cam_id)
+                    mask = seg_engine.get_mask_from_box(image, rect_2d)
+
+                    if mask is None:
+                        point_labels[box_indices] = encoded_label
+                        continue
+
+                    if hasattr(mask, "cpu"):
+                        mask = mask.cpu().numpy().asytpe()
+
+                    # apply the 2D Filter (cross modal projection)
+                    box_points = points[box_indices]
+                    uv, valid = GeometryUtils.project_lidar_to_image(
+                        box_points, calib["extrinsic"], calib["intrinsic"]
+                    )
+
+                    h, w = mask.shape[:2]
+                    valid_mask = (
+                        valid
+                        & (uv[:, 0] >= 0)
+                        & (uv[:, 0] < w)
+                        & (uv[:, 1] >= 0)
+                        & (uv[:, 1] < h)
+                    )
+
+                    subset_valid_indices = np.where(valid_mask)[0]
+                    valid_uv = uv[subset_valid_indices].astype(int)
+
+                    # Check which 3D points landed exactly on the True SAM2 pixels
+                    on_mask = mask[valid_uv[:, 1], valid_uv[:, 0]]
+
+                    # map back to original point cloud indices
+                    final_indices = box_indices[subset_valid_indices[on_mask]]
+
+                    # assign the encoded labels
+                    point_labels[final_indices] = encoded_label
+
+                # exporting the binary file matching the frame index
+                label_filename = export_dir / f"{f_index:06d}.label"
+                point_labels.tofile(label_filename)
+
+            logger.info(
+                f"Exported {end_frame - start_frame + 1} frames of point-level segmentation."
+            )
