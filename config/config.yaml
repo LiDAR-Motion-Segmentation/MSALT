@@ -46,3 +46,11 @@ lidar_view:
   default_ground_z: -1.5
   ground_percentile: 0.5   # percentile used to estimate ground from point cloud Z
   ground_bias: 0.05        # small downward bias so boxes don't float above ground
+
+export:
+  segmentation_mapping:
+    unknown: 3
+    moving_people: 1
+    static_people: 2
+    moving_car: 5
+    static_car: 4
